@@ -1,0 +1,12 @@
+[
+  {"name": "not a pack", "pack": "first-ofs.pack", "change": "set", "at": 0, "hex": "4b", "error": "E_PARSE: the data sent is not a pack"},
+  {"name": "version 3", "pack": "first-ofs.pack", "change": "set", "at": 7, "hex": "03", "error": "E_NEEDS_SUBTOOL: the pack is not version 2"},
+  {"name": "one flipped bit in the checksum", "pack": "first-ofs.pack", "change": "flip", "at": -1, "error": "E_PARSE: the pack checksum does not match its content"},
+  {"name": "cut off in the middle", "pack": "first-ofs.pack", "change": "truncate", "at": 700, "error": "E_PARSE: the pack holds data that cannot be decompressed"},
+  {"name": "cut off inside the header", "pack": "first-ofs.pack", "change": "truncate", "at": 9, "error": "E_PARSE: the pack ended early"},
+  {"name": "cut off inside the checksum", "pack": "first-ofs.pack", "change": "truncate", "at": -5, "error": "E_PARSE: the pack ended early"},
+  {"name": "data after the end", "pack": "first-ofs.pack", "change": "append", "hex": "00", "error": "E_PARSE: there is data after the end of the pack"},
+  {"name": "more entries stated than present", "pack": "tag.pack", "change": "set", "at": 11, "hex": "02", "error": "E_PARSE: the pack holds data that cannot be decompressed"},
+  {"name": "empty input", "pack": "tag.pack", "change": "truncate", "at": 0, "error": "E_PARSE: the pack ended early"},
+  {"name": "thin pack whose base is not stored", "pack": "second-thin.pack", "change": "none", "error": "E_PARSE: the pack holds a delta whose base is not available"}
+]

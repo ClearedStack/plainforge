@@ -1,0 +1,242 @@
+[
+  {
+    "name": "create a branch",
+    "ref": "refs/heads/main",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": ""
+  },
+  {
+    "name": "move a branch forward",
+    "ref": "refs/heads/main",
+    "old": "1111111111111111111111111111111111111111",
+    "new": "2222222222222222222222222222222222222222",
+    "current": "1111111111111111111111111111111111111111",
+    "new_kind": "commit",
+    "fast_forward": true,
+    "error": ""
+  },
+  {
+    "name": "create a branch in a folder",
+    "ref": "refs/heads/feature/widget",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": ""
+  },
+  {
+    "name": "create a tag on a commit",
+    "ref": "refs/tags/v0.0.1",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": ""
+  },
+  {
+    "name": "create an annotated tag",
+    "ref": "refs/tags/v0.0.1",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "3333333333333333333333333333333333333333",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "tag",
+    "fast_forward": false,
+    "error": ""
+  },
+  {
+    "name": "rewind or rewrite a branch",
+    "ref": "refs/heads/main",
+    "old": "2222222222222222222222222222222222222222",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "2222222222222222222222222222222222222222",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: the update is not a fast-forward"
+  },
+  {
+    "name": "delete a branch",
+    "ref": "refs/heads/side",
+    "old": "1111111111111111111111111111111111111111",
+    "new": "0000000000000000000000000000000000000000",
+    "current": "1111111111111111111111111111111111111111",
+    "new_kind": "missing",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: deleting a ref is not supported"
+  },
+  {
+    "name": "delete a tag",
+    "ref": "refs/tags/v0.0.1",
+    "old": "1111111111111111111111111111111111111111",
+    "new": "0000000000000000000000000000000000000000",
+    "current": "1111111111111111111111111111111111111111",
+    "new_kind": "missing",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: deleting a ref is not supported"
+  },
+  {
+    "name": "move a tag",
+    "ref": "refs/tags/v0.0.1",
+    "old": "1111111111111111111111111111111111111111",
+    "new": "2222222222222222222222222222222222222222",
+    "current": "1111111111111111111111111111111111111111",
+    "new_kind": "commit",
+    "fast_forward": true,
+    "error": "E_NEEDS_SUBTOOL: moving an existing tag is not supported"
+  },
+  {
+    "name": "old value is out of date",
+    "ref": "refs/heads/main",
+    "old": "1111111111111111111111111111111111111111",
+    "new": "3333333333333333333333333333333333333333",
+    "current": "2222222222222222222222222222222222222222",
+    "new_kind": "commit",
+    "fast_forward": true,
+    "error": "E_NEEDS_SUBTOOL: the ref changed since it was read; fetch and try again"
+  },
+  {
+    "name": "create a branch that already exists",
+    "ref": "refs/heads/main",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "2222222222222222222222222222222222222222",
+    "current": "1111111111111111111111111111111111111111",
+    "new_kind": "commit",
+    "fast_forward": true,
+    "error": "E_NEEDS_SUBTOOL: the ref changed since it was read; fetch and try again"
+  },
+  {
+    "name": "update a branch that does not exist",
+    "ref": "refs/heads/main",
+    "old": "1111111111111111111111111111111111111111",
+    "new": "2222222222222222222222222222222222222222",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": true,
+    "error": "E_NEEDS_SUBTOOL: the ref changed since it was read; fetch and try again"
+  },
+  {
+    "name": "update that changes nothing",
+    "ref": "refs/heads/main",
+    "old": "1111111111111111111111111111111111111111",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "1111111111111111111111111111111111111111",
+    "new_kind": "commit",
+    "fast_forward": true,
+    "error": "E_PARSE: the update does not change the ref"
+  },
+  {
+    "name": "delete something that is not there",
+    "ref": "refs/heads/side",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "0000000000000000000000000000000000000000",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "missing",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: deleting a ref is not supported"
+  },
+  {
+    "name": "new object was never sent",
+    "ref": "refs/heads/main",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "missing",
+    "fast_forward": false,
+    "error": "E_PARSE: the new value names an object that is not stored"
+  },
+  {
+    "name": "branch on a tree",
+    "ref": "refs/heads/main",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "tree",
+    "fast_forward": false,
+    "error": "E_PARSE: a branch must name a commit"
+  },
+  {
+    "name": "branch on a blob",
+    "ref": "refs/heads/main",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "blob",
+    "fast_forward": false,
+    "error": "E_PARSE: a branch must name a commit"
+  },
+  {
+    "name": "branch on a tag object",
+    "ref": "refs/heads/main",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "tag",
+    "fast_forward": false,
+    "error": "E_PARSE: a branch must name a commit"
+  },
+  {
+    "name": "tag on a tree",
+    "ref": "refs/tags/tree",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "tree",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: a tag that names a tree or a blob is not supported"
+  },
+  {
+    "name": "tag on a blob",
+    "ref": "refs/tags/blob",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "blob",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: a tag that names a tree or a blob is not supported"
+  },
+  {
+    "name": "notes",
+    "ref": "refs/notes/commits",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: only branches and tags are accepted"
+  },
+  {
+    "name": "HEAD",
+    "ref": "HEAD",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: only branches and tags are accepted"
+  },
+  {
+    "name": "name that climbs out of refs",
+    "ref": "refs/heads/../../HEAD",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"
+  },
+  {
+    "name": "name with a space",
+    "ref": "refs/heads/my branch",
+    "old": "0000000000000000000000000000000000000000",
+    "new": "1111111111111111111111111111111111111111",
+    "current": "0000000000000000000000000000000000000000",
+    "new_kind": "commit",
+    "fast_forward": false,
+    "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"
+  }
+]

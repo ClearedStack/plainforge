@@ -1,0 +1,20 @@
+[
+  {"name": "refs/heads/main", "error": ""},
+  {"name": "refs/heads/feature/widget-2", "error": ""},
+  {"name": "refs/tags/v0.0.1", "error": ""},
+  {"name": "refs/tags/release_1", "error": ""},
+  {"name": "HEAD", "error": "E_NEEDS_SUBTOOL: only branches and tags are accepted"},
+  {"name": "refs/notes/commits", "error": "E_NEEDS_SUBTOOL: only branches and tags are accepted"},
+  {"name": "refs/pull/1/head", "error": "E_NEEDS_SUBTOOL: only branches and tags are accepted"},
+  {"name": "refs/heads/", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/a//b", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/../../config", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/.hidden", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/a..b", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/main.lock", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/trailing.", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/with space", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/café", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/heads/a@{1}", "error": "E_NEEDS_SUBTOOL: the ref name is outside the accepted character set"},
+  {"name": "refs/tags/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "error": "E_NEEDS_SUBTOOL: the ref name is longer than 200 characters"}
+]

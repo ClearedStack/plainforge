@@ -1,0 +1,15 @@
+[
+  {"name": "one line", "input": "000ahello\n", "packets": ["hello\n"]},
+  {"name": "line then flush", "input": "0008NAK\n0000", "packets": ["NAK\n", "FLUSH"]},
+  {"name": "two lines with a NUL", "input": "000ca\u0000b c d\n0005x", "packets": ["a\u0000b c d\n", "x"]},
+  {"name": "empty input", "input": "", "packets": []},
+  {"name": "upper-case length", "input": "000Ahello\n", "packets": [], "error": "E_PARSE: a line length was not four lower-case hexadecimal digits"},
+  {"name": "length is not hex", "input": "zzzzhello", "packets": [], "error": "E_PARSE: a line length was not four lower-case hexadecimal digits"},
+  {"name": "length cut short", "input": "00", "packets": [], "error": "E_PARSE: a line ended inside its length"},
+  {"name": "payload cut short", "input": "000ahel", "packets": [], "error": "E_PARSE: a line ended before its stated length"},
+  {"name": "length too short", "input": "0003", "packets": [], "error": "E_PARSE: a line length was too short to be a line"},
+  {"name": "empty line", "input": "0004", "packets": [], "error": "E_PARSE: a line length was too short to be a line"},
+  {"name": "version 2 delimiter", "input": "000ahello\n0001", "packets": ["hello\n"], "error": "E_NEEDS_SUBTOOL: the request uses a protocol version 2 packet"},
+  {"name": "version 2 response end", "input": "0002", "packets": [], "error": "E_NEEDS_SUBTOOL: the request uses a protocol version 2 packet"},
+  {"name": "longer than allowed", "input": "fff1", "packets": [], "error": "E_PARSE: a line was longer than the protocol allows"}
+]
