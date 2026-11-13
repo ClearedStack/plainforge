@@ -1,0 +1,20 @@
+{
+  "slug": "plainforge",
+  "name": "Plainforge",
+  "formerly": "cs-git",
+  "kind": "control-plane",
+  "namespace": "clearedstack",
+  "responsibility": "Holds the primary copy of every repository, announces each change and mirrors code outward.",
+  "interfaces": [
+    "Git over HTTP and SSH, inside the cluster only",
+    "Push notifications to Keelworks",
+    "Outbound mirror of code to GitHub",
+    "Commits from Bellbuoy, Keelworks and Moldloft; reads by Shipkeeper"
+  ],
+  "repository": "plainforge",
+  "image": "plainforge",
+  "dependsOn": [],
+  "memory": "64 MiB",
+  "version": "v0.1.0-draft",
+  "subTools": []
+}
