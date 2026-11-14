@@ -32,6 +32,7 @@ type config struct {
 	notifyTokenFile string
 	mirrorURL       string
 	mirrorTokenFile string
+	forgeTokenFile  string
 }
 
 func parseFlags(args []string, getenv func(string) string) (config, error) {
@@ -46,11 +47,12 @@ func parseFlags(args []string, getenv func(string) string) (config, error) {
 	fs.StringVar(&cfg.notifyTokenFile, "notify-token-file", getenv("PLAINFORGE_NOTIFY_TOKEN_FILE"), "file holding the bearer token for -notify-url")
 	fs.StringVar(&cfg.mirrorURL, "mirror-url", getenv("PLAINFORGE_MIRROR_URL"), "base HTTPS URL for outbound Git push-mirroring")
 	fs.StringVar(&cfg.mirrorTokenFile, "mirror-token-file", getenv("PLAINFORGE_MIRROR_TOKEN_FILE"), "file holding the token for -mirror-url")
+	fs.StringVar(&cfg.forgeTokenFile, "forge-token-file", getenv("PLAINFORGE_FORGE_TOKEN_FILE"), "optional file holding the bearer token required on /v1/ forge requests")
 	if err := fs.Parse(args); err != nil {
-		return cfg, pferr.Parsef("usage: plainforge (-repos DIR | -repo DIR) [-init-repos LIST] [-listen ADDR] [-notify-url URL] [-notify-token-file FILE] [-mirror-url URL] [-mirror-token-file FILE]")
+		return cfg, pferr.Parsef("usage: plainforge (-repos DIR | -repo DIR) [-init-repos LIST] [-listen ADDR] [-notify-url URL] [-notify-token-file FILE] [-mirror-url URL] [-mirror-token-file FILE] [-forge-token-file FILE]")
 	}
 	if fs.NArg() != 0 || (cfg.repoDir == "" && cfg.reposDir == "") || (cfg.repoDir != "" && cfg.reposDir != "") {
-		return cfg, pferr.Parsef("usage: plainforge (-repos DIR | -repo DIR) [-init-repos LIST] [-listen ADDR] [-notify-url URL] [-notify-token-file FILE] [-mirror-url URL] [-mirror-token-file FILE]")
+		return cfg, pferr.Parsef("usage: plainforge (-repos DIR | -repo DIR) [-init-repos LIST] [-listen ADDR] [-notify-url URL] [-notify-token-file FILE] [-mirror-url URL] [-mirror-token-file FILE] [-forge-token-file FILE]")
 	}
 	if cfg.initRepos != "" && cfg.reposDir == "" {
 		return cfg, pferr.Parsef("-init-repos requires -repos")
@@ -59,7 +61,7 @@ func parseFlags(args []string, getenv func(string) string) (config, error) {
 }
 
 func buildServer(ctx context.Context, cfg config, logger *log.Logger) (*server.Server, string, error) {
-	srv := &server.Server{Log: logger}
+	srv := &server.Server{Log: logger, ForgeTokenFile: cfg.forgeTokenFile}
 	var notifySpoolDir string
 	var repos []*store.Repo
 	var targetDesc string

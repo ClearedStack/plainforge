@@ -1,0 +1,131 @@
+[
+  {
+    "name": "find open task when none exists yet",
+    "method": "GET",
+    "path": "/v1/repos/trawl/tasks?key=fp-abc123&open=true",
+    "wantStatus": 200,
+    "wantBody": "{\"found\":false}\n"
+  },
+  {
+    "name": "open first task in trawl",
+    "method": "POST",
+    "path": "/v1/repos/trawl/tasks",
+    "contentType": "application/json",
+    "body": "{\"key\":\"fp-abc123\",\"title\":\"trawl: E_PARSE [fp-abc12]\",\"body\":\"Worker: trawl\\nError code: E_PARSE\"}",
+    "wantStatus": 201,
+    "wantBody": "{\"id\":\"trawl#1\",\"repo\":\"trawl\",\"key\":\"fp-abc123\",\"title\":\"trawl: E_PARSE [fp-abc12]\",\"body\":\"Worker: trawl\\nError code: E_PARSE\",\"occurrences\":1,\"open\":true}\n"
+  },
+  {
+    "name": "find open task after opening",
+    "method": "GET",
+    "path": "/v1/repos/trawl/tasks?key=fp-abc123&open=true",
+    "wantStatus": 200,
+    "wantBody": "{\"found\":true,\"task\":{\"id\":\"trawl#1\",\"repo\":\"trawl\",\"key\":\"fp-abc123\",\"title\":\"trawl: E_PARSE [fp-abc12]\",\"body\":\"Worker: trawl\\nError code: E_PARSE\",\"occurrences\":1,\"open\":true}}\n"
+  },
+  {
+    "name": "add second occurrence to trawl#1",
+    "method": "POST",
+    "path": "/v1/repos/trawl/tasks/occurrence",
+    "contentType": "application/json",
+    "body": "{\"id\":\"trawl#1\"}",
+    "wantStatus": 200,
+    "wantBody": "{\"id\":\"trawl#1\",\"repo\":\"trawl\",\"key\":\"fp-abc123\",\"title\":\"trawl: E_PARSE [fp-abc12]\",\"body\":\"Worker: trawl\\nError code: E_PARSE\",\"occurrences\":2,\"open\":true}\n"
+  },
+  {
+    "name": "add occurrence to non-existent task returns E_PARSE",
+    "method": "POST",
+    "path": "/v1/repos/trawl/tasks/occurrence",
+    "contentType": "application/json",
+    "body": "{\"id\":\"trawl#99\"}",
+    "wantStatus": 400,
+    "wantBody": "{\"code\":\"E_PARSE\",\"message\":\"the task to add to is not open\"}\n"
+  },
+  {
+    "name": "propose DATA/CONFIG change on edit/EP-0001",
+    "method": "POST",
+    "path": "/v1/repos/trawl/changes",
+    "contentType": "application/json",
+    "body": "{\"repo\":\"trawl\",\"branch\":\"edit/EP-0001\",\"path\":\"config/sources.json\",\"content\":\"{\\n  \\\"enabled\\\": true\\n}\\n\",\"title\":\"Portal proposal EP-0001: sources\",\"message\":\"Portal proposal EP-0001: sources\\n\\nClass: CONFIG\\nTarget: sources\"}",
+    "wantStatus": 201,
+    "wantBody": "{\"created\":true,\"branch\":\"edit/EP-0001\",\"commit\":\"673d652d0ab347156d845b707f16f7a9d1f6365e\"}\n"
+  },
+  {
+    "name": "repeating identical change returns 200 created=false",
+    "method": "POST",
+    "path": "/v1/repos/trawl/changes",
+    "contentType": "application/json",
+    "body": "{\"repo\":\"trawl\",\"branch\":\"edit/EP-0001\",\"path\":\"config/sources.json\",\"content\":\"{\\n  \\\"enabled\\\": true\\n}\\n\",\"title\":\"Portal proposal EP-0001: sources\",\"message\":\"Portal proposal EP-0001: sources\\n\\nClass: CONFIG\\nTarget: sources\"}",
+    "wantStatus": 200,
+    "wantBody": "{\"created\":false,\"branch\":\"edit/EP-0001\",\"commit\":\"673d652d0ab347156d845b707f16f7a9d1f6365e\"}\n"
+  },
+  {
+    "name": "different change on existing branch returns 409 E_PARSE",
+    "method": "POST",
+    "path": "/v1/repos/trawl/changes",
+    "contentType": "application/json",
+    "body": "{\"repo\":\"trawl\",\"branch\":\"edit/EP-0001\",\"path\":\"config/sources.json\",\"content\":\"{\\n  \\\"enabled\\\": false\\n}\\n\",\"title\":\"Portal proposal EP-0001: sources\",\"message\":\"Portal proposal EP-0001: sources\\n\\nClass: CONFIG\\nTarget: sources\"}",
+    "wantStatus": 409,
+    "wantBody": "{\"code\":\"E_PARSE\",\"message\":\"the branch already holds a different change\"}\n"
+  },
+  {
+    "name": "propose change targeting main is refused with E_PARSE",
+    "method": "POST",
+    "path": "/v1/repos/trawl/changes",
+    "contentType": "application/json",
+    "body": "{\"branch\":\"main\",\"path\":\"config/sources.json\",\"content\":\"{}\",\"title\":\"Direct write\",\"message\":\"Direct write\"}",
+    "wantStatus": 400,
+    "wantBody": "{\"code\":\"E_PARSE\",\"message\":\"the change branch must be a non-main branch name\"}\n"
+  },
+  {
+    "name": "propose change with path traversal is refused with E_PARSE",
+    "method": "POST",
+    "path": "/v1/repos/trawl/changes",
+    "contentType": "application/json",
+    "body": "{\"branch\":\"edit/EP-0002\",\"path\":\"../secret.txt\",\"content\":\"x\",\"title\":\"Bad path\",\"message\":\"Bad path\"}",
+    "wantStatus": 400,
+    "wantBody": "{\"code\":\"E_PARSE\",\"message\":\"the file path contains a forbidden segment\"}\n"
+  },
+  {
+    "name": "sync mirror for source and task succeeds",
+    "method": "POST",
+    "path": "/v1/repos/trawl/mirror",
+    "contentType": "application/json",
+    "body": "{\"repo\":\"trawl\",\"content\":[\"source\",\"task\"]}",
+    "wantStatus": 200,
+    "wantBody": "{\"status\":\"ok\"}\n"
+  },
+  {
+    "name": "sync mirror for container image content is refused with E_NEEDS_SUBTOOL",
+    "method": "POST",
+    "path": "/v1/repos/trawl/mirror",
+    "contentType": "application/json",
+    "body": "{\"repo\":\"trawl\",\"content\":[\"image\"]}",
+    "wantStatus": 422,
+    "wantBody": "{\"code\":\"E_NEEDS_SUBTOOL\",\"message\":\"this kind of content may not be mirrored\"}\n"
+  },
+  {
+    "name": "unknown repository returns 404 E_NEEDS_SUBTOOL",
+    "method": "GET",
+    "path": "/v1/repos/nonexistent/tasks?key=fp-abc123&open=true",
+    "wantStatus": 404,
+    "wantBody": "{\"code\":\"E_NEEDS_SUBTOOL\",\"message\":\"this Plainforge has no repository with that name\"}\n"
+  },
+  {
+    "name": "unknown JSON field returns 400 E_PARSE",
+    "method": "POST",
+    "path": "/v1/repos/trawl/tasks",
+    "contentType": "application/json",
+    "body": "{\"key\":\"fp-1\",\"title\":\"t\",\"body\":\"b\",\"extra\":true}",
+    "wantStatus": 400,
+    "wantBody": "{\"code\":\"E_PARSE\",\"message\":\"the request JSON is malformed\"}\n"
+  },
+  {
+    "name": "dotted repository name clearedstack.com works identically",
+    "method": "POST",
+    "path": "/v1/repos/clearedstack.com/tasks",
+    "contentType": "application/json",
+    "body": "{\"key\":\"proposal-EP-0042\",\"title\":\"Portal proposal EP-0042: home\",\"body\":\"Fix typo on landing page.\"}",
+    "wantStatus": 201,
+    "wantBody": "{\"id\":\"clearedstack.com#1\",\"repo\":\"clearedstack.com\",\"key\":\"proposal-EP-0042\",\"title\":\"Portal proposal EP-0042: home\",\"body\":\"Fix typo on landing page.\",\"occurrences\":1,\"open\":true}\n"
+  }
+]

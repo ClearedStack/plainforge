@@ -37,6 +37,9 @@ spec:
               app.kubernetes.io/name: keelworks
         - podSelector:
             matchLabels:
+              app.kubernetes.io/name: keelworks-build
+        - podSelector:
+            matchLabels:
               app.kubernetes.io/managed-by: keelworks
         - podSelector:
             matchLabels:
@@ -89,6 +92,46 @@ spec:
     # Outbound HTTPS push-mirroring to GitHub only; private and link-local
     # ranges are excluded so Plainforge cannot reach cluster-internal HTTPS
     # services such as the Kubernetes API server.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Nightly off-node encrypted backup job gets DNS and public HTTPS egress only;
+# the monthly restore drill pod stays completely isolated under default-deny.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plainforge-backup
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge-backup
+    app.kubernetes.io/part-of: clearedstack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: plainforge-backup
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

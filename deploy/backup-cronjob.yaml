@@ -1,0 +1,220 @@
+# Nightly age-encrypted off-box backup and monthly isolated restore drill for
+# Plainforge's bare Git repository volume (SPEC.md: Failure Modes & Recovery).
+#
+# No secrets are stored in Git:
+#   - ConfigMap "plainforge-backup-config" provides the public age recipient key
+#     ("recipient", safe to store in plaintext because age public keys only
+#     encrypt).
+#   - Secret "plainforge-backup-dest" (generated or sealed in-cluster) provides
+#     the off-node upload endpoint ("url") and credential ("token") for nightly
+#     backups, and the read-only drill decryption identity for the monthly
+#     restore drill.
+#
+# Replace the placeholder sha256 digest below with the signed plainforge-backup
+# helper image digest pushed to Lazarette before applying to the cluster.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: plainforge-backup
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge-backup
+    app.kubernetes.io/part-of: clearedstack
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 900
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: plainforge-backup
+            app.kubernetes.io/part-of: clearedstack
+        spec:
+          automountServiceAccountToken: false
+          priorityClassName: cs-build-low
+          restartPolicy: Never
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/arch
+                        operator: In
+                        values: ["arm64"]
+                      - key: kubernetes.io/hostname
+                        operator: NotIn
+                        values: ["cm3588-plus"]
+            # Co-locate on the node holding the ReadWriteOnce plainforge-repos
+            # volume so the pod can mount it read-only alongside Plainforge.
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: plainforge
+                  topologyKey: kubernetes.io/hostname
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: lazarette.clearedstack.svc.cluster.local:5000/plainforge-backup@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              imagePullPolicy: IfNotPresent
+              args:
+                - backup
+                - -repos=/var/lib/plainforge/repos
+                - -scratch=/scratch
+                - -recipient-file=/etc/plainforge-backup/recipient
+                - -dest-token-file=/var/run/secrets/plainforge-backup/token
+              env:
+                - name: PLAINFORGE_BACKUP_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: plainforge-backup-dest
+                      key: url
+                      optional: true
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 64Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/plainforge
+                  readOnly: true
+                - name: scratch
+                  mountPath: /scratch
+                - name: backup-config
+                  mountPath: /etc/plainforge-backup
+                  readOnly: true
+                - name: backup-dest
+                  mountPath: /var/run/secrets/plainforge-backup
+                  readOnly: true
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: plainforge-repos
+                readOnly: true
+            - name: scratch
+              emptyDir:
+                sizeLimit: 512Mi
+            - name: backup-config
+              configMap:
+                name: plainforge-backup-config
+                optional: true
+            - name: backup-dest
+              secret:
+                secretName: plainforge-backup-dest
+                defaultMode: 0400
+                optional: true
+---
+# Monthly restore drill: unpacks the repository archive into an isolated
+# scratch emptyDir with zero network access and runs git fsck --strict on every
+# bare repository to prove recoverability.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: plainforge-restore-drill
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge-restore-drill
+    app.kubernetes.io/part-of: clearedstack
+spec:
+  schedule: "0 4 1 * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 900
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: plainforge-restore-drill
+            app.kubernetes.io/part-of: clearedstack
+        spec:
+          automountServiceAccountToken: false
+          priorityClassName: cs-build-low
+          restartPolicy: Never
+          affinity:
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                  - matchExpressions:
+                      - key: kubernetes.io/arch
+                        operator: In
+                        values: ["arm64"]
+                      - key: kubernetes.io/hostname
+                        operator: NotIn
+                        values: ["cm3588-plus"]
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: plainforge
+                  topologyKey: kubernetes.io/hostname
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            fsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: restore-drill
+              image: lazarette.clearedstack.svc.cluster.local:5000/plainforge-backup@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              imagePullPolicy: IfNotPresent
+              args:
+                - restore-drill
+                - -repos=/var/lib/plainforge/repos
+                - -scratch=/scratch
+                - -recipient-file=/etc/plainforge-backup/recipient
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  memory: 64Mi
+              securityContext:
+                privileged: false
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /var/lib/plainforge
+                  readOnly: true
+                - name: scratch
+                  mountPath: /scratch
+                - name: backup-config
+                  mountPath: /etc/plainforge-backup
+                  readOnly: true
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: plainforge-repos
+                readOnly: true
+            - name: scratch
+              emptyDir:
+                sizeLimit: 512Mi
+            - name: backup-config
+              configMap:
+                name: plainforge-backup-config
+                optional: true
