@@ -1,0 +1,18 @@
+[
+  {"name": "plainforge", "error": ""},
+  {"name": "clearedstack.com", "error": ""},
+  {"name": "sample-calculator", "error": ""},
+  {"name": "tool_01", "error": ""},
+  {"name": "a", "error": ""},
+  {"name": "", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "Bad Name", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "Plainforge", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": ".hidden", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "-flag", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "trailing.", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "trailing-", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "trailing_", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "two..dots", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "sub/dir", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"},
+  {"name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "error": "E_NEEDS_SUBTOOL: the repository directory name is outside the accepted character set"}
+]

@@ -1,0 +1,10 @@
+[
+  {"ref": "refs/heads/main", "mirror": true},
+  {"ref": "refs/tags/v0.1.0", "mirror": true},
+  {"ref": "refs/tags/release/2026-11", "mirror": true},
+  {"ref": "refs/heads/side", "mirror": false},
+  {"ref": "refs/heads/edit/ED-0001", "mirror": false},
+  {"ref": "refs/heads/main-2", "mirror": false},
+  {"ref": "refs/notes/commits", "mirror": false},
+  {"ref": "HEAD", "mirror": false}
+]

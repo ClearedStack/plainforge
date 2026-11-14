@@ -1,0 +1,15 @@
+[
+  {"name": "copy everything", "base": "hello world", "delta_hex": "0b0b900b", "result": "hello world"},
+  {"name": "insert runs past the stated size", "base": "hello world", "delta_hex": "0b0b9006067468657265 0a", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "copy a prefix then insert, right size", "base": "hello world", "delta_hex": "0b0c9006067468657265 0a", "result": "hello there\n"},
+  {"name": "insert only", "base": "", "delta_hex": "0003036162 63", "result": "abc"},
+  {"name": "copy with an offset", "base": "hello world", "delta_hex": "0b05910605", "result": "world"},
+  {"name": "base size does not match", "base": "hello", "delta_hex": "0b0b900b", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "copy past the end of the base", "base": "hello world", "delta_hex": "0b0b91060b", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "reserved zero instruction", "base": "hello world", "delta_hex": "0b0b00", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "insert cut short", "base": "", "delta_hex": "00030361", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "result shorter than stated", "base": "hello world", "delta_hex": "0b0b9005", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "result longer than stated", "base": "hello world", "delta_hex": "0b05900b", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "empty delta", "base": "", "delta_hex": "", "error": "E_PARSE: a delta in the pack is malformed"},
+  {"name": "result larger than the limit", "base": "", "delta_hex": "00808080 08", "error": "E_NEEDS_SUBTOOL: an object in the pack is larger than Plainforge handles"}
+]

@@ -1,0 +1,417 @@
+[
+  {
+    "name": "refs offered for pushing, empty repository",
+    "method": "GET",
+    "path": "/example.git/info/refs?service=git-receive-pack",
+    "status": 200,
+    "type": "application/x-git-receive-pack-advertisement",
+    "body": "001f# service=git-receive-pack\n000000730000000000000000000000000000000000000000 capabilities^{}\u0000report-status ofs-delta agent=plainforge/v0.1.0-draft\n0000"
+  },
+  {
+    "name": "refs offered for fetching, empty repository",
+    "method": "GET",
+    "path": "/example.git/info/refs?service=git-upload-pack",
+    "status": 200,
+    "type": "application/x-git-upload-pack-advertisement",
+    "body": "001e# service=git-upload-pack\n0000008a0000000000000000000000000000000000000000 capabilities^{}\u0000multi_ack_detailed symref=HEAD:refs/heads/main agent=plainforge/v0.1.0-draft\n0000"
+  },
+  {
+    "name": "first push creates main",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "0000000000000000000000000000000000000000 e3c8ae8e346cb84353a7019c80f095fd3577d906 refs/heads/main\u0000report-status ofs-delta agent=git/fixture",
+      "FLUSH"
+    ],
+    "pack": "first-ofs.pack",
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "000eunpack ok\n0017ok refs/heads/main\n0000",
+    "notifications": [
+      "{\"repository\":\"example\",\"ref\":\"refs/heads/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"e3c8ae8e346cb84353a7019c80f095fd3577d906\"}\n"
+    ]
+  },
+  {
+    "name": "thin push moves main forward with a [skip-ci] commit",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "e3c8ae8e346cb84353a7019c80f095fd3577d906 c64f344baa23d0a3d007eccaf91da9af614c082d refs/heads/main\u0000report-status ofs-delta agent=git/fixture",
+      "FLUSH"
+    ],
+    "pack": "second-thin.pack",
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "000eunpack ok\n0017ok refs/heads/main\n0000",
+    "notifications": []
+  },
+  {
+    "name": "push creates an annotated tag",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "0000000000000000000000000000000000000000 802948e8fe74397c55c3fc6c59b63320289d5609 refs/tags/v0.0.1\u0000report-status ofs-delta agent=git/fixture",
+      "FLUSH"
+    ],
+    "pack": "tag.pack",
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "000eunpack ok\n0018ok refs/tags/v0.0.1\n0000",
+    "notifications": [
+      "{\"repository\":\"example\",\"ref\":\"refs/tags/v0.0.1\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"802948e8fe74397c55c3fc6c59b63320289d5609\"}\n"
+    ]
+  },
+  {
+    "name": "push creates another branch",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "0000000000000000000000000000000000000000 09aaff359c552ec5457604776b3e0c06823b6ac6 refs/heads/side\u0000report-status ofs-delta agent=git/fixture",
+      "FLUSH"
+    ],
+    "pack": "side.pack",
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "000eunpack ok\n0017ok refs/heads/side\n0000",
+    "notifications": []
+  },
+  {
+    "name": "one push with every kind of refused update, and one accepted",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "c64f344baa23d0a3d007eccaf91da9af614c082d 075384d3fed9c2aa099676ebae9185bf46f79a67 refs/heads/main\u0000report-status ofs-delta agent=git/fixture",
+      "09aaff359c552ec5457604776b3e0c06823b6ac6 0000000000000000000000000000000000000000 refs/heads/side",
+      "802948e8fe74397c55c3fc6c59b63320289d5609 c64f344baa23d0a3d007eccaf91da9af614c082d refs/tags/v0.0.1",
+      "0000000000000000000000000000000000000000 c64f344baa23d0a3d007eccaf91da9af614c082d refs/notes/commits",
+      "0000000000000000000000000000000000000000 c64f344baa23d0a3d007eccaf91da9af614c082d refs/heads/main",
+      "0000000000000000000000000000000000000000 ffffffffffffffffffffffffffffffffffffffff refs/heads/ghost",
+      "0000000000000000000000000000000000000000 075384d3fed9c2aa099676ebae9185bf46f79a67 refs/tags/light",
+      "0000000000000000000000000000000000000000 e3c8ae8e346cb84353a7019c80f095fd3577d906 refs/tags/light",
+      "0000000000000000000000000000000000000000 802948e8fe74397c55c3fc6c59b63320289d5609 refs/heads/tagged",
+      "FLUSH"
+    ],
+    "pack_hex": "5041434b0000000200000000029d08823bd8a8eab510ad6ac75c823cfd3ed31e",
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "000eunpack ok\n0049ng refs/heads/main E_NEEDS_SUBTOOL: the update is not a fast-forward\n0048ng refs/heads/side E_NEEDS_SUBTOOL: deleting a ref is not supported\n0051ng refs/tags/v0.0.1 E_NEEDS_SUBTOOL: moving an existing tag is not supported\n004fng refs/notes/commits E_NEEDS_SUBTOOL: only branches and tags are accepted\n0042ng refs/heads/main E_PARSE: the push names the same ref twice\n0052ng refs/heads/ghost E_PARSE: the new value names an object that is not stored\n0017ok refs/tags/light\n0042ng refs/tags/light E_PARSE: the push names the same ref twice\n003eng refs/heads/tagged E_PARSE: a branch must name a commit\n0000",
+    "notifications": [
+      "{\"repository\":\"example\",\"ref\":\"refs/tags/light\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"075384d3fed9c2aa099676ebae9185bf46f79a67\"}\n"
+    ]
+  },
+  {
+    "name": "push whose pack is damaged changes nothing",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "0000000000000000000000000000000000000000 e3c8ae8e346cb84353a7019c80f095fd3577d906 refs/heads/damaged\u0000report-status ofs-delta agent=git/fixture",
+      "FLUSH"
+    ],
+    "pack_hex": "5041434b0000000200000000029d08823bd8a8eab510ad6ac75c823cfd3ed300",
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "0041unpack E_PARSE: the pack checksum does not match its content\n0050ng refs/heads/damaged E_PARSE: the pack checksum does not match its content\n0000",
+    "notifications": []
+  },
+  {
+    "name": "push whose pack is missing changes nothing",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "0000000000000000000000000000000000000000 e3c8ae8e346cb84353a7019c80f095fd3577d906 refs/heads/damaged\u0000report-status ofs-delta agent=git/fixture",
+      "FLUSH"
+    ],
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "0029unpack E_PARSE: the pack ended early\n0038ng refs/heads/damaged E_PARSE: the pack ended early\n0000",
+    "notifications": []
+  },
+  {
+    "name": "push without report-status gets an empty answer",
+    "method": "POST",
+    "path": "/example.git/git-receive-pack",
+    "content_type": "application/x-git-receive-pack-request",
+    "lines": [
+      "0000000000000000000000000000000000000000 e3c8ae8e346cb84353a7019c80f095fd3577d906 refs/heads/quiet",
+      "FLUSH"
+    ],
+    "pack_hex": "5041434b0000000200000000029d08823bd8a8eab510ad6ac75c823cfd3ed31e",
+    "status": 200,
+    "type": "application/x-git-receive-pack-result",
+    "body": "",
+    "notifications": []
+  },
+  {
+    "name": "refs offered for pushing",
+    "method": "GET",
+    "path": "/example.git/info/refs?service=git-receive-pack",
+    "status": 200,
+    "type": "application/x-git-receive-pack-advertisement",
+    "body": "001f# service=git-receive-pack\n00000073c64f344baa23d0a3d007eccaf91da9af614c082d refs/heads/main\u0000report-status ofs-delta agent=plainforge/v0.1.0-draft\n003ee3c8ae8e346cb84353a7019c80f095fd3577d906 refs/heads/quiet\n003d09aaff359c552ec5457604776b3e0c06823b6ac6 refs/heads/side\n003d075384d3fed9c2aa099676ebae9185bf46f79a67 refs/tags/light\n003e802948e8fe74397c55c3fc6c59b63320289d5609 refs/tags/v0.0.1\n0000"
+  },
+  {
+    "name": "refs offered for fetching",
+    "method": "GET",
+    "path": "/example.git/info/refs?service=git-upload-pack",
+    "status": 200,
+    "type": "application/x-git-upload-pack-advertisement",
+    "body": "001e# service=git-upload-pack\n0000007fc64f344baa23d0a3d007eccaf91da9af614c082d HEAD\u0000multi_ack_detailed symref=HEAD:refs/heads/main agent=plainforge/v0.1.0-draft\n003dc64f344baa23d0a3d007eccaf91da9af614c082d refs/heads/main\n003ee3c8ae8e346cb84353a7019c80f095fd3577d906 refs/heads/quiet\n003d09aaff359c552ec5457604776b3e0c06823b6ac6 refs/heads/side\n003d075384d3fed9c2aa099676ebae9185bf46f79a67 refs/tags/light\n003e802948e8fe74397c55c3fc6c59b63320289d5609 refs/tags/v0.0.1\n0041e3c8ae8e346cb84353a7019c80f095fd3577d906 refs/tags/v0.0.1^{}\n0000"
+  },
+  {
+    "name": "clone of main",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d multi_ack_detailed agent=git/fixture\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "status": 200,
+    "type": "application/x-git-upload-pack-result",
+    "body": "0008NAK\n",
+    "objects": [
+      "c64f344baa23d0a3d007eccaf91da9af614c082d commit",
+      "49a328f38da913ce7c63b6eabecc0b87f8a60ac3 tree",
+      "325f6b0e4a85fe4013ea4ebd082b518ec01d8b3a blob",
+      "47a837d0edeb9b19e94a2ddd9f145d4539ba537d blob",
+      "a70f176efeb0703a345b883ab621dcd29489273b tree",
+      "41057c1b3966cb6ac8afd16b818a9df82b7b1ab1 blob",
+      "6f78f2ceaa7510bfcf31020eda0792f6483f0871 tree",
+      "6874b69fde7a17fd9717e98732b186694887a142 blob",
+      "e3c8ae8e346cb84353a7019c80f095fd3577d906 commit",
+      "cf7d3f990c408e9b4e4743946cbe26a13b5c7b33 tree",
+      "78b6c392944ee6e53754c83d76960f9fc22bac4e blob",
+      "defcd1775cec7c4f51e3fa8562ba1b43150ff5d2 tree",
+      "db51722e1a14576f7b4cb9264780262b4cd0bf84 blob",
+      "075384d3fed9c2aa099676ebae9185bf46f79a67 commit",
+      "bb531ddc5f5046de42cb2333265fb547a19e7d6c tree",
+      "74f3fce56faa4cd28d962cdd2f30777c41951dbb tree",
+      "ddad7af388951045e96b6c06093357f5f7987b08 blob"
+    ]
+  },
+  {
+    "name": "fetch of main by a client that has B",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d multi_ack_detailed\n",
+      "FLUSH",
+      "have e3c8ae8e346cb84353a7019c80f095fd3577d906\n",
+      "have eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n",
+      "done\n"
+    ],
+    "status": 200,
+    "type": "application/x-git-upload-pack-result",
+    "body": "0038ACK e3c8ae8e346cb84353a7019c80f095fd3577d906 common\n0031ACK e3c8ae8e346cb84353a7019c80f095fd3577d906\n",
+    "objects": [
+      "c64f344baa23d0a3d007eccaf91da9af614c082d commit",
+      "49a328f38da913ce7c63b6eabecc0b87f8a60ac3 tree",
+      "47a837d0edeb9b19e94a2ddd9f145d4539ba537d blob",
+      "6f78f2ceaa7510bfcf31020eda0792f6483f0871 tree",
+      "6874b69fde7a17fd9717e98732b186694887a142 blob"
+    ]
+  },
+  {
+    "name": "fetch of the tag by a client that has main",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want 802948e8fe74397c55c3fc6c59b63320289d5609 multi_ack_detailed\n",
+      "FLUSH",
+      "have c64f344baa23d0a3d007eccaf91da9af614c082d\n",
+      "done\n"
+    ],
+    "status": 200,
+    "type": "application/x-git-upload-pack-result",
+    "body": "0038ACK c64f344baa23d0a3d007eccaf91da9af614c082d common\n0031ACK c64f344baa23d0a3d007eccaf91da9af614c082d\n",
+    "objects": [
+      "802948e8fe74397c55c3fc6c59b63320289d5609 tag"
+    ]
+  },
+  {
+    "name": "negotiation round that is not done yet",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d multi_ack_detailed\n",
+      "FLUSH",
+      "have eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n",
+      "have 075384d3fed9c2aa099676ebae9185bf46f79a67\n",
+      "FLUSH"
+    ],
+    "status": 200,
+    "type": "application/x-git-upload-pack-result",
+    "body": "0038ACK 075384d3fed9c2aa099676ebae9185bf46f79a67 common\n0008NAK\n"
+  },
+  {
+    "name": "negotiation round with nothing in common",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d multi_ack_detailed\n",
+      "FLUSH",
+      "have eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n",
+      "FLUSH"
+    ],
+    "status": 200,
+    "type": "application/x-git-upload-pack-result",
+    "body": "0008NAK\n"
+  },
+  {
+    "name": "fetch that names haves without multi_ack_detailed",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d\n",
+      "FLUSH",
+      "have e3c8ae8e346cb84353a7019c80f095fd3577d906\n",
+      "done\n"
+    ],
+    "status": 422,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: a fetch that names what it has must use multi_ack_detailed\n"
+  },
+  {
+    "name": "want that is not stored",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "status": 422,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: a wanted object is not the tip of a branch or a tag\n"
+  },
+  {
+    "name": "want that is stored but is not the tip of a ref",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want 49a328f38da913ce7c63b6eabecc0b87f8a60ac3\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "status": 422,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: a wanted object is not the tip of a branch or a tag\n"
+  },
+  {
+    "name": "shallow clone",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d\n",
+      "deepen 1\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "status": 422,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: shallow and filtered fetches are not supported\n"
+  },
+  {
+    "name": "fetch request that is not pkt-lines",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "pack_hex": "6e6f7420676974",
+    "status": 400,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_PARSE: a line length was not four lower-case hexadecimal digits\n"
+  },
+  {
+    "name": "wrong content type",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "text/plain",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "status": 400,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_PARSE: the request does not have the content type of a Git request\n"
+  },
+  {
+    "name": "unknown content encoding",
+    "method": "POST",
+    "path": "/example.git/git-upload-pack",
+    "content_type": "application/x-git-upload-pack-request",
+    "content_encoding": "br",
+    "lines": [
+      "want c64f344baa23d0a3d007eccaf91da9af614c082d\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "status": 422,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: the request body uses an unknown content encoding\n"
+  },
+  {
+    "name": "dumb protocol",
+    "method": "GET",
+    "path": "/example.git/info/refs",
+    "status": 422,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: only the smart HTTP protocol is supported\n"
+  },
+  {
+    "name": "unknown service",
+    "method": "GET",
+    "path": "/example.git/info/refs?service=git-upload-archive",
+    "status": 422,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: only the smart HTTP protocol is supported\n"
+  },
+  {
+    "name": "another repository",
+    "method": "GET",
+    "path": "/other.git/info/refs?service=git-upload-pack",
+    "status": 404,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: there is no such repository or page\n"
+  },
+  {
+    "name": "a file inside the repository",
+    "method": "GET",
+    "path": "/example.git/HEAD",
+    "status": 404,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: there is no such repository or page\n"
+  },
+  {
+    "name": "path that climbs out",
+    "method": "GET",
+    "path": "/example.git/../example.git/config",
+    "status": 404,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: there is no such repository or page\n"
+  },
+  {
+    "name": "wrong method",
+    "method": "GET",
+    "path": "/example.git/git-upload-pack",
+    "status": 405,
+    "type": "text/plain; charset=utf-8",
+    "body": "E_NEEDS_SUBTOOL: this page does not answer that HTTP method\n"
+  }
+]
