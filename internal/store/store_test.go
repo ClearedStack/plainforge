@@ -135,12 +135,16 @@ func TestOpenRefusals(t *testing.T) {
 		setup func(dir string)
 		want  string
 	}{
-		{"packed objects", func(d string) {
+		{"unindexed pack", func(d string) {
 			os.MkdirAll(filepath.Join(d, "objects/pack"), 0o755)
 			os.WriteFile(filepath.Join(d, "objects/pack/pack-1.pack"), nil, 0o644)
-		}, "E_NEEDS_SUBTOOL: the repository holds packed objects, which Plainforge cannot read yet"},
-		{"packed refs", func(d string) { os.WriteFile(filepath.Join(d, "packed-refs"), nil, 0o644) },
-			"E_NEEDS_SUBTOOL: the repository uses packed-refs, which Plainforge cannot read yet"},
+		}, "E_PARSE: the repository has mismatched pack and index files"},
+		{"promisor pack", func(d string) {
+			os.MkdirAll(filepath.Join(d, "objects/pack"), 0o755)
+			os.WriteFile(filepath.Join(d, "objects/pack/pack-1.promisor"), nil, 0o644)
+		}, "E_NEEDS_SUBTOOL: the repository uses a promisor pack, which Plainforge cannot read"},
+		{"empty packed refs", func(d string) { os.WriteFile(filepath.Join(d, "packed-refs"), nil, 0o644) },
+			"E_PARSE: packed-refs is empty"},
 		{"alternates", func(d string) {
 			os.MkdirAll(filepath.Join(d, "objects/info"), 0o755)
 			os.WriteFile(filepath.Join(d, "objects/info/alternates"), nil, 0o644)
@@ -423,4 +427,214 @@ func TestCatalog(t *testing.T) {
 		t.Fatalf("stray file: got %q", errText(err))
 	}
 }
+
+func TestPackedRepositoryWithGitGCAndFsck(t *testing.T) {
+	gitBin, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+	tmp := t.TempDir()
+	work := filepath.Join(tmp, "work")
+	bare := filepath.Join(tmp, "seeded.git")
+	runGit := func(dir string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command(gitBin, args...)
+		if dir != "" {
+			cmd.Dir = dir
+		}
+		cmd.Env = append(os.Environ(),
+			"GIT_CONFIG_GLOBAL=/dev/null",
+			"GIT_CONFIG_NOSYSTEM=1",
+			"GIT_AUTHOR_NAME=Example Author",
+			"GIT_AUTHOR_EMAIL=author@example.invalid",
+			"GIT_COMMITTER_NAME=Example Author",
+			"GIT_COMMITTER_EMAIL=author@example.invalid",
+		)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	runGit("", "init", "-b", "main", work)
+	baseText := strings.Repeat("ClearedStack plainforge delta test line.\n", 80)
+	if err := os.WriteFile(filepath.Join(work, "notes.txt"), []byte(baseText+"v1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(work, "add", "-A")
+	runGit(work, "commit", "-m", "First packed commit")
+	firstHex := runGit(work, "rev-parse", "HEAD")
+
+	if err := os.WriteFile(filepath.Join(work, "notes.txt"), []byte(baseText+"v2 with delta body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "app.yaml"), []byte("name: seeded\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(work, "add", "-A")
+	runGit(work, "commit", "-m", "Second packed commit")
+	secondHex := runGit(work, "rev-parse", "HEAD")
+	runGit(work, "tag", "-a", "v0.1.0", "-m", "Annotated release")
+	tagHex := runGit(work, "rev-parse", "v0.1.0")
+
+	runGit("", "clone", "--bare", work, bare)
+	runGit("", "--git-dir", bare, "gc", "--aggressive", "--prune=now")
+	runGit("", "--git-dir", bare, "pack-refs", "--all")
+
+	// Confirm the bare repository actually holds a packfile and packed-refs.
+	packs, _ := filepath.Glob(filepath.Join(bare, "objects/pack/*.pack"))
+	if len(packs) == 0 {
+		t.Fatal("expected git gc to write a packfile")
+	}
+	if _, err := os.Stat(filepath.Join(bare, "packed-refs")); err != nil {
+		t.Fatalf("expected packed-refs: %v", err)
+	}
+
+	// OpenReadOnly succeeds without touching the directory, even with 0555 root.
+	ro, err := OpenReadOnly(bare)
+	if err != nil {
+		t.Fatalf("OpenReadOnly: %v", err)
+	}
+	rep, err := ro.Fsck()
+	if err != nil {
+		t.Fatalf("ro.Fsck: %v", err)
+	}
+	if rep.Refs != 2 || rep.Objects < 6 {
+		t.Fatalf("unexpected FsckReport: %+v", rep)
+	}
+
+	// Full Open reads packed refs, delta-packed objects, and accepts new loose commits on top.
+	r, err := Open(bare)
+	if err != nil {
+		t.Fatalf("Open packed repo: %v", err)
+	}
+	firstOID, _ := ParseOID(firstHex)
+	secondOID, _ := ParseOID(secondHex)
+	tagOID, _ := ParseOID(tagHex)
+
+	refs, err := r.Refs()
+	if err != nil {
+		t.Fatalf("Refs: %v", err)
+	}
+	wantRefs := []Ref{
+		{Name: "refs/heads/main", OID: secondOID},
+		{Name: "refs/tags/v0.1.0", OID: tagOID},
+	}
+	if !reflect.DeepEqual(refs, wantRefs) {
+		t.Fatalf("Refs = %v, want %v", refs, wantRefs)
+	}
+	if anc, err := r.IsAncestor(firstOID, secondOID); err != nil || !anc {
+		t.Fatalf("IsAncestor = %v, %v", anc, err)
+	}
+	walked, err := r.Walk([]OID{secondOID, tagOID}, map[OID]struct{}{})
+	if err != nil || len(walked) < 6 {
+		t.Fatalf("Walk = %d objects, err=%v", len(walked), err)
+	}
+
+	// Colliding ref against packed-refs is refused cleanly.
+	if err := r.SetRef("refs/heads/main/sub", secondOID); errText(err) != "E_NEEDS_SUBTOOL: the ref name collides with an existing ref" {
+		t.Fatalf("SetRef collision against packed-refs: %v", err)
+	}
+
+	// Advance main with a new loose commit referencing the packed tree and parent.
+	_, commitBytes, err := r.Read(secondOID)
+	if err != nil {
+		t.Fatalf("Read second commit: %v", err)
+	}
+	ci, err := ParseCommit(commitBytes)
+	if err != nil {
+		t.Fatalf("ParseCommit: %v", err)
+	}
+	q, err := r.NewQuarantine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	thirdOID, err := q.Write(Commit, commitOn(ci.Tree.String(), secondOID.String()))
+	if err != nil {
+		t.Fatalf("q.Write: %v", err)
+	}
+	if err := q.Commit(); err != nil {
+		t.Fatalf("q.Commit against packed parent/tree: %v", err)
+	}
+	if err := r.SetRef("refs/heads/main", thirdOID); err != nil {
+		t.Fatalf("SetRef main: %v", err)
+	}
+	gotMain, ok, err := r.Ref("refs/heads/main")
+	if err != nil || !ok || gotMain != thirdOID {
+		t.Fatalf("Ref(main) after loose override = %s, %v, %v", gotMain, ok, err)
+	}
+	if _, err := r.Fsck(); err != nil {
+		t.Fatalf("Fsck after loose commit on packed repo: %v", err)
+	}
+	runGit("", "--git-dir", bare, "fsck", "--strict")
+
+	// Flipping one byte inside the pack body is caught by Fsck's stream checksum.
+	os.Chmod(packs[0], 0o644)
+	packBytes, err := os.ReadFile(packs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	packBytes[16] ^= 0xff
+	if err := os.WriteFile(packs[0], packBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Fsck(); err == nil {
+		t.Fatal("expected Fsck to reject corrupted packfile stream")
+	}
+}
+
+func TestFsckDetectsLooseAndRefDamage(t *testing.T) {
+	r := newRepo(t)
+	q, err := r.NewQuarantine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, _ := q.Write(Blob, []byte("hello fsck\n"))
+	treeBytes, err := FormatTree([]TreeEntry{{Mode: "100644", Name: "hello.txt", OID: blob}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, err := q.Write(Tree, treeBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit, err := q.Write(Commit, commitOn(tree.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetRef("refs/heads/main", commit); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := r.Fsck()
+	if err != nil || rep.Refs != 1 || rep.Objects != 3 {
+		t.Fatalf("Fsck clean repo: %+v, %v", rep, err)
+	}
+
+	// Write a non-canonical tree directly into loose storage (b before a).
+	badTree := append([]byte("100644 z.txt\x00"), blob[:]...)
+	badTree = append(badTree, []byte("100644 a.txt\x00")...)
+	badTree = append(badTree, blob[:]...)
+	badOID, err := r.objs.write(Tree, badTree, filepath.Join(r.dir, workDir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Fsck(); errText(err) != "E_PARSE: a tree object is not in canonical sort order" {
+		t.Fatalf("non-canonical tree: got %q", errText(err))
+	}
+	os.Chmod(r.objs.path(badOID), 0o644)
+	os.Remove(r.objs.path(badOID))
+
+	// Point a branch at a blob instead of a commit.
+	if err := r.SetRef("refs/heads/bad-branch", blob); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Fsck(); errText(err) != "E_PARSE: a branch does not point to a commit" {
+		t.Fatalf("branch pointing to blob: got %q", errText(err))
+	}
+}
+
 

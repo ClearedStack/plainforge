@@ -46,6 +46,7 @@ type Repo struct {
 	dir    string
 	name   string
 	objs   objdir
+	packs  []*packFile
 	pushMu sync.Mutex
 }
 
@@ -77,6 +78,30 @@ func Open(dir string) (*Repo, error) {
 		return nil, err
 	}
 	if err := r.recover(); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// OpenReadOnly opens an existing bare repository in dir without creating
+// directories or sweeping temporary files, so it works on a read-only mount.
+func OpenReadOnly(dir string) (*Repo, error) {
+	name := strings.TrimSuffix(filepath.Base(filepath.Clean(dir)), ".git")
+	if err := CheckRepoName(name); err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, pferr.Parsef("the repository does not exist")
+		}
+		return nil, storageErr("opening the repository", err)
+	}
+	if len(entries) == 0 {
+		return nil, pferr.Parsef("the repository directory is empty")
+	}
+	r := &Repo{dir: dir, name: name, objs: objdir{filepath.Join(dir, "objects")}}
+	if err := r.check(); err != nil {
 		return nil, err
 	}
 	return r, nil
@@ -120,13 +145,18 @@ func (r *Repo) check() error {
 	if st, err := os.Stat(r.objs.dir); err != nil || !st.IsDir() {
 		return pferr.Parsef("the repository has no objects directory")
 	}
-	if packs, _ := filepath.Glob(filepath.Join(r.objs.dir, "pack", "*.pack")); len(packs) > 0 {
-		return pferr.Needsf("the repository holds packed objects, which Plainforge cannot read yet")
-	}
-	for _, f := range []string{"packed-refs", "shallow", "objects/info/alternates"} {
+	for _, f := range []string{"shallow", "objects/info/alternates"} {
 		if _, err := os.Stat(filepath.Join(r.dir, f)); err == nil {
 			return pferr.Needsf("the repository uses %s, which Plainforge cannot read yet", f)
 		}
+	}
+	packs, err := loadPackFiles(r.objs.dir)
+	if err != nil {
+		return err
+	}
+	r.packs = packs
+	if _, err := readPackedRefs(r.dir); err != nil {
+		return err
 	}
 	cfg, err := os.ReadFile(filepath.Join(r.dir, "config"))
 	if err != nil {
@@ -204,11 +234,29 @@ func CheckRefName(name string) error {
 func (r *Repo) Dir() string { return r.dir }
 
 // Has reports whether an object is stored.
-func (r *Repo) Has(o OID) bool { return r.objs.has(o) }
+func (r *Repo) Has(o OID) bool {
+	if r.objs.has(o) {
+		return true
+	}
+	for _, pf := range r.packs {
+		if _, ok := pf.lookup(o); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Repo) readObjectDepth(o OID, depth int) (Type, []byte, error) {
+	t, data, err := r.objs.read(o)
+	if errors.Is(err, errNotFound) {
+		return r.readFromPacks(o, depth)
+	}
+	return t, data, err
+}
 
 // Read returns a stored object.
 func (r *Repo) Read(o OID) (Type, []byte, error) {
-	t, data, err := r.objs.read(o)
+	t, data, err := r.readObjectDepth(o, 0)
 	if errors.Is(err, errNotFound) {
 		return 0, nil, pferr.Parsef("the repository is missing an object it needs")
 	}
@@ -219,55 +267,80 @@ func (r *Repo) Read(o OID) (Type, []byte, error) {
 // is not stored.
 func (r *Repo) TypeOf(o OID) (t Type, ok bool, err error) {
 	t, err = r.objs.typeOf(o)
+	if err == nil {
+		return t, true, nil
+	}
+	if !errors.Is(err, errNotFound) {
+		return 0, false, err
+	}
+	t, _, err = r.readFromPacks(o, 0)
 	if errors.Is(err, errNotFound) {
 		return 0, false, nil
 	}
 	return t, err == nil, err
 }
 
-// Refs returns every branch and tag, sorted by name.
+// Refs returns every branch and tag, sorted by name. Loose ref files override
+// entries in packed-refs.
 func (r *Repo) Refs() ([]Ref, error) {
-	var refs []Ref
-	root := filepath.Join(r.dir, "refs")
-	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return storageErr("listing refs", err)
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(r.dir, p)
-		name := filepath.ToSlash(rel)
-		if err := CheckRefName(name); err != nil {
-			return pferr.Needsf("the repository holds a ref Plainforge has no rule for")
-		}
-		oid, _, err := r.Ref(name)
-		if err != nil {
-			return err
-		}
-		refs = append(refs, Ref{Name: name, OID: oid})
-		return nil
-	})
+	packed, err := readPackedRefs(r.dir)
 	if err != nil {
 		return nil, err
 	}
+	byName := make(map[string]OID, len(packed))
+	for name, oid := range packed {
+		byName[name] = oid
+	}
+	root := filepath.Join(r.dir, "refs")
+	if _, statErr := os.Stat(root); statErr == nil {
+		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return storageErr("listing refs", err)
+			}
+			if d.IsDir() {
+				return nil
+			}
+			rel, _ := filepath.Rel(r.dir, p)
+			name := filepath.ToSlash(rel)
+			if err := CheckRefName(name); err != nil {
+				return pferr.Needsf("the repository holds a ref Plainforge has no rule for")
+			}
+			oid, ok, err := r.readLooseRef(name)
+			if err != nil {
+				return err
+			}
+			if ok {
+				byName[name] = oid
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else if !errors.Is(statErr, fs.ErrNotExist) {
+		return nil, storageErr("listing refs", statErr)
+	}
+	refs := make([]Ref, 0, len(byName))
+	for name, oid := range byName {
+		refs = append(refs, Ref{Name: name, OID: oid})
+	}
 	sort.Slice(refs, func(i, j int) bool { return refs[i].Name < refs[j].Name })
+	for i := 1; i < len(refs); i++ {
+		if strings.HasPrefix(refs[i].Name, refs[i-1].Name+"/") {
+			return nil, pferr.Parsef("two refs in the repository collide")
+		}
+	}
 	return refs, nil
 }
 
-// Ref returns the object one ref names. ok is false when there is no such
-// ref.
-func (r *Repo) Ref(name string) (oid OID, ok bool, err error) {
-	if err := CheckRefName(name); err != nil {
-		return oid, false, err
-	}
-	b, err := os.ReadFile(filepath.Join(r.dir, filepath.FromSlash(name)))
+func (r *Repo) readLooseRef(name string) (oid OID, ok bool, err error) {
+	p := filepath.Join(r.dir, filepath.FromSlash(name))
+	b, err := os.ReadFile(p)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return oid, false, nil
 		}
-		// A directory here means other refs live below this name.
-		if st, serr := os.Stat(filepath.Join(r.dir, filepath.FromSlash(name))); serr == nil && st.IsDir() {
+		if st, serr := os.Stat(p); serr == nil && st.IsDir() {
 			return oid, false, nil
 		}
 		return oid, false, storageErr("reading a ref", err)
@@ -279,11 +352,38 @@ func (r *Repo) Ref(name string) (oid OID, ok bool, err error) {
 	return oid, true, nil
 }
 
+// Ref returns the object one ref names. ok is false when there is no such
+// ref. Loose ref files take precedence over packed-refs.
+func (r *Repo) Ref(name string) (oid OID, ok bool, err error) {
+	if err := CheckRefName(name); err != nil {
+		return oid, false, err
+	}
+	oid, ok, err = r.readLooseRef(name)
+	if err != nil || ok {
+		return oid, ok, err
+	}
+	packed, err := readPackedRefs(r.dir)
+	if err != nil {
+		return oid, false, err
+	}
+	oid, ok = packed[name]
+	return oid, ok, nil
+}
+
 // SetRef points a ref at an object. The new value is written to a temporary
 // file, flushed to disk and moved into place.
 func (r *Repo) SetRef(name string, oid OID) error {
 	if err := CheckRefName(name); err != nil {
 		return err
+	}
+	packed, err := readPackedRefs(r.dir)
+	if err != nil {
+		return err
+	}
+	for other := range packed {
+		if other != name && (strings.HasPrefix(other, name+"/") || strings.HasPrefix(name, other+"/")) {
+			return pferr.Needsf("the ref name collides with an existing ref")
+		}
 	}
 	final := filepath.Join(r.dir, filepath.FromSlash(name))
 	if err := os.MkdirAll(filepath.Dir(final), 0o755); err != nil {
@@ -398,7 +498,7 @@ func (q *Quarantine) Write(t Type, data []byte) (OID, error) {
 func (q *Quarantine) Read(o OID) (t Type, data []byte, ok bool, err error) {
 	t, data, err = q.objs.read(o)
 	if errors.Is(err, errNotFound) {
-		t, data, err = q.repo.objs.read(o)
+		t, data, err = q.repo.readObjectDepth(o, 0)
 	}
 	if errors.Is(err, errNotFound) {
 		return 0, nil, false, nil
