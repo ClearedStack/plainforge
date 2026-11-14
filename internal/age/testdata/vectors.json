@@ -1,0 +1,23 @@
+{
+  "rfc8439_poly1305": {
+    "key_hex": "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b",
+    "msg": "Cryptographic Forum Research Group",
+    "tag_hex": "a8061dc1305136c6c22b8baf0c0127a9"
+  },
+  "rfc8439_aead": {
+    "key_hex": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+    "nonce_hex": "070000004041424344454647",
+    "aad_hex": "50515253c0c1c2c3c4c5c6c7",
+    "plaintext": "Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.",
+    "ciphertext_and_tag_hex": "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b61161ae10b594f09e26a7e902ecbd0600691"
+  },
+  "age_v1_deterministic": {
+    "recipient_priv_hex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+    "recipient_pub_hex": "07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c",
+    "ephemeral_priv_hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+    "file_key_hex": "909192939495969798999a9b9c9d9e9f",
+    "stream_nonce_hex": "b0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+    "plaintext": "ClearedStack plainforge nightly backup vector\n",
+    "archive_base64": "YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBlYVl4N3Q0YitjbVBFZ01zM3EzUTU2QjVPWS9IaHJpTXlFYnNpYStGcFJvCmJTaThyakJMMWRPTU4wclN6enhQZTZCaEtmSGw0UmlqRHVQbjhlUEs1cE0KLS0tIEFROGR6eDBveHNjL040NmVSeHk2RXUwWUltYUZzMjdxbFlOOHh4NHE2SjAKsLGys7S1tre4ubq7vL2+v+vecE5J578VcLZf9ldxf8z3ulKX6Iy+KhHvJ8plyKyjuRYqKYiFEtfNunvi9O+udjQ+CdYVr1FH9x0daVKM"
+  }
+}
