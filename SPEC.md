@@ -6,7 +6,7 @@
 
 The same text is published at [clearedstack.com/platform/plainforge/](https://clearedstack.com/platform/plainforge/). To change the specification, change it here and say why.
 
-Plainforge (`v0.1.0-draft`, owned by Plainforge) is a clean-room, MIT-licensed Go Git server running in the `clearedstack` control-plane namespace. It replaces heavy third-party forges such as Forgejo—eliminating 40+ database tables and hundreds of megabytes of RAM—while serving as the cluster's primary source of truth for code and configuration.
+Plainforge (`v0.1.0-draft`, owned by Plainforge) is a clean-room, MIT-licensed Go Git server running in the `clearedstack` control-plane namespace. It replaces heavy third-party forges such as Forgejo, eliminating 40+ database tables and hundreds of megabytes of RAM, while serving as the cluster's primary source of truth for code and configuration.
 
 ## Overview & Role
 
@@ -25,7 +25,7 @@ ClearedStack treats the cluster as primary and GitHub as the public mirror:
 | **Version** | `v0.1.0-draft` |
 | **Owning Repo** | Plainforge (`plainforge`) |
 | **RAM Request** | `64 MiB` |
-| **Priority Class** | High (Control Plane — protected from eviction) |
+| **Priority Class** | High (Control Plane, protected from eviction) |
 | **Storage** | Persistent Volume Claim (bare `.git` repositories; 1 of 3 cluster PVCs) |
 | **Network Exposure** | Cluster-private (`ClusterIP` only); outbound HTTPS push-mirror to GitHub |
 

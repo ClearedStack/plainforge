@@ -1,0 +1,187 @@
+# Plainforge in the clearedstack control-plane namespace.
+#
+# Plainforge holds one of the cluster's three PersistentVolumeClaims (bare
+# .git repositories). No secrets are stored in this file:
+#   - Keelworks webhook authentication uses a projected ServiceAccount token
+#     with audience "keelworks", rotated automatically by Kubernetes.
+#   - Outbound GitHub mirroring reads the optional in-cluster Secret
+#     "plainforge-github-mirror" (keys "url" and "token"). When that Secret is
+#     absent (for example during bootstrap or on a disconnected network),
+#     Plainforge starts with outbound mirroring turned off.
+#
+# Replace the placeholder sha256 digest below with the signed digest pushed to
+# Lazarette by ko / Keelworks before applying to the cluster.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: plainforge
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge
+    app.kubernetes.io/part-of: clearedstack
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: plainforge-repos
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge
+    app.kubernetes.io/part-of: clearedstack
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: plainforge
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge
+    app.kubernetes.io/part-of: clearedstack
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: plainforge
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: http
+    - name: http-legacy
+      protocol: TCP
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: plainforge
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge
+    app.kubernetes.io/part-of: clearedstack
+    app.kubernetes.io/version: v0.1.0-draft
+spec:
+  replicas: 1
+  # One writer on the ReadWriteOnce repository volume: detach the old pod
+  # before starting the new one.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: plainforge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: plainforge
+        app.kubernetes.io/part-of: clearedstack
+    spec:
+      serviceAccountName: plainforge
+      automountServiceAccountToken: false
+      priorityClassName: clearedstack-high
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: ["arm64"]
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values: ["cm3588-plus"]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: plainforge
+          # Built from source with ko and stored in Lazarette; replace the
+          # bootstrap placeholder digest with the signed image digest.
+          image: lazarette.clearedstack.svc.cluster.local:5000/plainforge@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          imagePullPolicy: IfNotPresent
+          args:
+            - -listen=0.0.0.0:8080
+            # Use a directory below the mount point so the ext4 lost+found
+            # directory on the volume stays out of the repository catalog.
+            - -repos=/var/lib/plainforge/repos
+            - -init-repos=clearedstack.com,muster,logbook,plainforge,lazarette,keelworks,shipkeeper,trawl,sextant,assay,countersign,waybill,moldloft,shakedown,chartroom,tidegauge,bellbuoy
+            - -notify-url=http://keelworks.clearedstack.svc.cluster.local:8080/webhook
+            - -notify-token-file=/var/run/secrets/keelworks/token
+            - -mirror-token-file=/var/run/secrets/github-mirror/token
+          env:
+            - name: GOMEMLIMIT
+              value: 48MiB
+            - name: PLAINFORGE_MIRROR_URL
+              valueFrom:
+                secretKeyRef:
+                  name: plainforge-github-mirror
+                  key: url
+                  optional: true
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            privileged: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/plainforge
+            - name: keelworks-token
+              mountPath: /var/run/secrets/keelworks
+              readOnly: true
+            - name: github-mirror
+              mountPath: /var/run/secrets/github-mirror
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: plainforge-repos
+        - name: keelworks-token
+          projected:
+            defaultMode: 0400
+            sources:
+              - serviceAccountToken:
+                  audience: keelworks
+                  expirationSeconds: 3600
+                  path: token
+        - name: github-mirror
+          secret:
+            secretName: plainforge-github-mirror
+            defaultMode: 0400
+            optional: true
+            items:
+              - key: token
+                path: token

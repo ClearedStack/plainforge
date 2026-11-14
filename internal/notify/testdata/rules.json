@@ -1,0 +1,74 @@
+[
+  {
+    "name": "first commit on main",
+    "ref": "refs/heads/main",
+    "before": "0000000000000000000000000000000000000000",
+    "after": "1111111111111111111111111111111111111111",
+    "tip_message": "Add the example widget\n",
+    "body": "{\"repository\":\"example\",\"ref\":\"refs/heads/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"1111111111111111111111111111111111111111\"}\n"
+  },
+  {
+    "name": "later commit on main",
+    "ref": "refs/heads/main",
+    "before": "1111111111111111111111111111111111111111",
+    "after": "2222222222222222222222222222222222222222",
+    "tip_message": "Describe the example widget\n",
+    "body": "{\"repository\":\"example\",\"ref\":\"refs/heads/main\",\"before\":\"1111111111111111111111111111111111111111\",\"after\":\"2222222222222222222222222222222222222222\"}\n"
+  },
+  {
+    "name": "tip commit on main carries [skip-ci]",
+    "ref": "refs/heads/main",
+    "before": "1111111111111111111111111111111111111111",
+    "after": "2222222222222222222222222222222222222222",
+    "tip_message": "Update the example image digest [skip-ci]\n",
+    "body": ""
+  },
+  {
+    "name": "[skip-ci] in the body of the tip message",
+    "ref": "refs/heads/main",
+    "before": "1111111111111111111111111111111111111111",
+    "after": "2222222222222222222222222222222222222222",
+    "tip_message": "Update the example image digest\n\n[skip-ci]\n",
+    "body": ""
+  },
+  {
+    "name": "other spellings of the marker do not count",
+    "ref": "refs/heads/main",
+    "before": "1111111111111111111111111111111111111111",
+    "after": "2222222222222222222222222222222222222222",
+    "tip_message": "Tidy up [skip ci] [ci skip] [SKIP-CI] skip-ci\n",
+    "body": "{\"repository\":\"example\",\"ref\":\"refs/heads/main\",\"before\":\"1111111111111111111111111111111111111111\",\"after\":\"2222222222222222222222222222222222222222\"}\n"
+  },
+  {
+    "name": "another branch",
+    "ref": "refs/heads/side",
+    "before": "0000000000000000000000000000000000000000",
+    "after": "1111111111111111111111111111111111111111",
+    "tip_message": "Add a side note\n",
+    "body": ""
+  },
+  {
+    "name": "a branch whose name only starts with main",
+    "ref": "refs/heads/main-2",
+    "before": "0000000000000000000000000000000000000000",
+    "after": "1111111111111111111111111111111111111111",
+    "tip_message": "Add a side note\n",
+    "body": ""
+  },
+  {
+    "name": "new tag",
+    "ref": "refs/tags/v0.0.1",
+    "before": "0000000000000000000000000000000000000000",
+    "after": "3333333333333333333333333333333333333333",
+    "tip_message": "",
+    "body": "{\"repository\":\"example\",\"ref\":\"refs/tags/v0.0.1\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"3333333333333333333333333333333333333333\"}\n"
+  },
+  {
+    "name": "a tag named main is still a tag",
+    "ref": "refs/tags/main",
+    "before": "0000000000000000000000000000000000000000",
+    "after": "3333333333333333333333333333333333333333",
+    "tip_message": "[skip-ci]",
+    "body": "{\"repository\":\"example\",\"ref\":\"refs/tags/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"3333333333333333333333333333333333333333\"}\n"
+  }
+]

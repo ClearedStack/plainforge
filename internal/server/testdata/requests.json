@@ -1,0 +1,253 @@
+[
+  {
+    "name": "clone",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111 multi_ack_detailed agent=git/fixture\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "parsed": "wants=[1111111111111111111111111111111111111111] caps=[multi_ack_detailed agent=git/fixture] haves=[] done=true",
+    "error": ""
+  },
+  {
+    "name": "two wants, haves, done",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111 multi_ack_detailed\n",
+      "want 2222222222222222222222222222222222222222\n",
+      "FLUSH",
+      "have 3333333333333333333333333333333333333333\n",
+      "done\n"
+    ],
+    "parsed": "wants=[1111111111111111111111111111111111111111 2222222222222222222222222222222222222222] caps=[multi_ack_detailed] haves=[3333333333333333333333333333333333333333] done=true",
+    "error": ""
+  },
+  {
+    "name": "negotiation round without done",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111\n",
+      "FLUSH",
+      "have 2222222222222222222222222222222222222222\n",
+      "have 3333333333333333333333333333333333333333\n",
+      "FLUSH"
+    ],
+    "parsed": "wants=[1111111111111111111111111111111111111111] caps=[] haves=[2222222222222222222222222222222222222222 3333333333333333333333333333333333333333] done=false",
+    "error": ""
+  },
+  {
+    "name": "nothing wanted",
+    "kind": "fetch",
+    "lines": [
+      "FLUSH",
+      "done\n"
+    ],
+    "error": "E_PARSE: the fetch request wants nothing"
+  },
+  {
+    "name": "empty body",
+    "kind": "fetch",
+    "lines": [],
+    "error": "E_PARSE: the fetch request ended before its list of wanted objects did"
+  },
+  {
+    "name": "no flush after the wants",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111\n"
+    ],
+    "error": "E_PARSE: the fetch request ended before its list of wanted objects did"
+  },
+  {
+    "name": "short object name",
+    "kind": "fetch",
+    "lines": [
+      "want 1234\n",
+      "FLUSH"
+    ],
+    "error": "E_PARSE: an object name was not 40 lower-case hexadecimal digits"
+  },
+  {
+    "name": "something that is not a want",
+    "kind": "fetch",
+    "lines": [
+      "give 1111111111111111111111111111111111111111\n",
+      "FLUSH"
+    ],
+    "error": "E_PARSE: a line in the fetch request is not a want"
+  },
+  {
+    "name": "capabilities on the second want",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111\n",
+      "want 2222222222222222222222222222222222222222 multi_ack_detailed\n",
+      "FLUSH"
+    ],
+    "error": "E_PARSE: capabilities may only follow the first want"
+  },
+  {
+    "name": "capability that was not offered",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111 side-band-64k\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "error": "E_NEEDS_SUBTOOL: the client asked for a capability Plainforge does not offer"
+  },
+  {
+    "name": "shallow clone",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111\n",
+      "deepen 1\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "error": "E_NEEDS_SUBTOOL: shallow and filtered fetches are not supported"
+  },
+  {
+    "name": "partial clone",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111\n",
+      "filter blob:none\n",
+      "FLUSH",
+      "done\n"
+    ],
+    "error": "E_NEEDS_SUBTOOL: shallow and filtered fetches are not supported"
+  },
+  {
+    "name": "line after done",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111\n",
+      "FLUSH",
+      "done\n",
+      "have 2222222222222222222222222222222222222222\n"
+    ],
+    "error": "E_PARSE: the fetch request goes on after it said it was done"
+  },
+  {
+    "name": "neither have nor done",
+    "kind": "fetch",
+    "lines": [
+      "want 1111111111111111111111111111111111111111\n",
+      "FLUSH",
+      "maybe\n"
+    ],
+    "error": "E_PARSE: a line in the fetch request is neither a have nor done"
+  },
+  {
+    "name": "one update",
+    "kind": "push",
+    "lines": [
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/main\u0000report-status ofs-delta agent=git/fixture",
+      "FLUSH"
+    ],
+    "parsed": "caps=[report-status ofs-delta agent=git/fixture] 0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/main",
+    "error": ""
+  },
+  {
+    "name": "two updates",
+    "kind": "push",
+    "lines": [
+      "1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 refs/heads/main\u0000report-status",
+      "0000000000000000000000000000000000000000 3333333333333333333333333333333333333333 refs/tags/v0.0.1\n",
+      "FLUSH"
+    ],
+    "parsed": "caps=[report-status] 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222 refs/heads/main | 0000000000000000000000000000000000000000 3333333333333333333333333333333333333333 refs/tags/v0.0.1",
+    "error": ""
+  },
+  {
+    "name": "nothing to do",
+    "kind": "push",
+    "lines": [
+      "FLUSH"
+    ],
+    "parsed": "caps=[]",
+    "error": ""
+  },
+  {
+    "name": "empty push body",
+    "kind": "push",
+    "lines": [],
+    "parsed": "caps=[]",
+    "error": ""
+  },
+  {
+    "name": "no flush after the updates",
+    "kind": "push",
+    "lines": [
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/main\u0000report-status"
+    ],
+    "error": "E_PARSE: the push ended inside its list of ref updates"
+  },
+  {
+    "name": "update with a missing part",
+    "kind": "push",
+    "lines": [
+      "0000000000000000000000000000000000000000 refs/heads/main\u0000report-status",
+      "FLUSH"
+    ],
+    "error": "E_PARSE: a ref update is not an old value, a new value and a name"
+  },
+  {
+    "name": "ref name with a space",
+    "kind": "push",
+    "lines": [
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/my branch\u0000report-status",
+      "FLUSH"
+    ],
+    "error": "E_PARSE: a ref update is not an old value, a new value and a name"
+  },
+  {
+    "name": "bad old value",
+    "kind": "push",
+    "lines": [
+      "zzzz 1111111111111111111111111111111111111111 refs/heads/main\u0000report-status",
+      "FLUSH"
+    ],
+    "error": "E_PARSE: an object name was not 40 lower-case hexadecimal digits"
+  },
+  {
+    "name": "capability that was not offered",
+    "kind": "push",
+    "lines": [
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/main\u0000report-status side-band-64k",
+      "FLUSH"
+    ],
+    "error": "E_NEEDS_SUBTOOL: the client asked for a capability Plainforge does not offer"
+  },
+  {
+    "name": "atomic push",
+    "kind": "push",
+    "lines": [
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/main\u0000report-status atomic",
+      "FLUSH"
+    ],
+    "error": "E_NEEDS_SUBTOOL: the client asked for a capability Plainforge does not offer"
+  },
+  {
+    "name": "capabilities on the second update",
+    "kind": "push",
+    "lines": [
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/main",
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/side\u0000report-status",
+      "FLUSH"
+    ],
+    "error": "E_PARSE: capabilities may only follow the first ref update"
+  },
+  {
+    "name": "push from a shallow clone",
+    "kind": "push",
+    "lines": [
+      "shallow 1111111111111111111111111111111111111111",
+      "0000000000000000000000000000000000000000 1111111111111111111111111111111111111111 refs/heads/main\u0000report-status",
+      "FLUSH"
+    ],
+    "error": "E_NEEDS_SUBTOOL: shallow and signed pushes are not supported"
+  }
+]

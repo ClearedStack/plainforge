@@ -1,0 +1,126 @@
+[
+  {
+    "name": "blob",
+    "kind": "blob",
+    "content": "Example widget notes\n",
+    "oid": "325f6b0e4a85fe4013ea4ebd082b518ec01d8b3a",
+    "links": []
+  },
+  {
+    "name": "empty blob",
+    "kind": "blob",
+    "content": "",
+    "oid": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "links": []
+  },
+  {
+    "name": "empty tree",
+    "kind": "tree",
+    "content": "",
+    "oid": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+    "links": []
+  },
+  {
+    "name": "tree with a file, a directory, a link and a submodule",
+    "kind": "tree",
+    "content": "100644 a.txt\u0000aaaaaaaaaaaaaaaaaaaa40000 dir\u0000bbbbbbbbbbbbbbbbbbbb120000 link\u0000cccccccccccccccccccc160000 sub\u0000dddddddddddddddddddd100755 tool\u0000eeeeeeeeeeeeeeeeeeee",
+    "oid": "bc0ed928351762e8931d5af5467a6e9a18433c46",
+    "links": [
+      "blob 6161616161616161616161616161616161616161",
+      "tree 6262626262626262626262626262626262626262",
+      "blob 6363636363636363636363636363636363636363",
+      "blob 6565656565656565656565656565656565656565"
+    ]
+  },
+  {
+    "name": "tree entry with an unknown mode",
+    "kind": "tree",
+    "content": "100666 a.txt\u0000aaaaaaaaaaaaaaaaaaaa",
+    "error": "E_PARSE: a tree entry had an unknown mode"
+  },
+  {
+    "name": "tree entry cut short",
+    "kind": "tree",
+    "content": "100644 a.txt\u0000aaaa",
+    "error": "E_PARSE: a tree entry was cut short"
+  },
+  {
+    "name": "tree entry named .git",
+    "kind": "tree",
+    "content": "40000 .GIT\u0000aaaaaaaaaaaaaaaaaaaa",
+    "error": "E_PARSE: a tree entry had a name that is not allowed"
+  },
+  {
+    "name": "tree entry named with a slash",
+    "kind": "tree",
+    "content": "100644 a/b\u0000aaaaaaaaaaaaaaaaaaaa",
+    "error": "E_PARSE: a tree entry had a name that is not allowed"
+  },
+  {
+    "name": "tree entry without a mode",
+    "kind": "tree",
+    "content": "a.txt\u0000aaaaaaaaaaaaaaaaaaaa",
+    "error": "E_PARSE: a tree entry had no mode"
+  },
+  {
+    "name": "root commit",
+    "kind": "commit",
+    "content": "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nauthor Example Author <author@example.invalid> 978307200 +0000\ncommitter Example Author <author@example.invalid> 978307200 +0000\n\nAn empty start\n",
+    "oid": "a843b6953901b54dd4634b3c1b8913e65530f924",
+    "links": [
+      "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+    ],
+    "message": "An empty start\n"
+  },
+  {
+    "name": "merge commit",
+    "kind": "commit",
+    "content": "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nparent 1111111111111111111111111111111111111111\nparent 2222222222222222222222222222222222222222\nauthor Example Author <author@example.invalid> 978307200 +0000\ncommitter Example Author <author@example.invalid> 978307200 +0000\n\nJoin two lines of work\n\nparent 3333333333333333333333333333333333333333\n",
+    "oid": "4c063a9e3f3013223759d8cc847f33f95a71f6e0",
+    "links": [
+      "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "commit 1111111111111111111111111111111111111111",
+      "commit 2222222222222222222222222222222222222222"
+    ],
+    "message": "Join two lines of work\n\nparent 3333333333333333333333333333333333333333\n"
+  },
+  {
+    "name": "commit without a tree",
+    "kind": "commit",
+    "content": "author Example Author <author@example.invalid> 978307200 +0000\n\nNo tree\n",
+    "error": "E_PARSE: a commit did not start with its tree"
+  },
+  {
+    "name": "commit with a short tree name",
+    "kind": "commit",
+    "content": "tree 4b825dc6\n\nShort\n",
+    "error": "E_PARSE: a commit named its tree badly"
+  },
+  {
+    "name": "commit with a bad parent",
+    "kind": "commit",
+    "content": "tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\nparent nothing\n\nBad parent\n",
+    "error": "E_PARSE: a commit named a parent badly"
+  },
+  {
+    "name": "annotated tag",
+    "kind": "tag",
+    "content": "object 1111111111111111111111111111111111111111\ntype commit\ntag v0.0.1\ntagger Example Author <author@example.invalid> 978307200 +0000\n\nFirst made-up release\n",
+    "oid": "6030111327ca252f65c7f7acdc56a1bc3b560a62",
+    "links": [
+      "commit 1111111111111111111111111111111111111111"
+    ]
+  },
+  {
+    "name": "tag without a type",
+    "kind": "tag",
+    "content": "object 1111111111111111111111111111111111111111\ntag v0.0.1\n\nNo type\n",
+    "error": "E_PARSE: a tag object did not start with its object and type"
+  },
+  {
+    "name": "tag of an unknown kind",
+    "kind": "tag",
+    "content": "object 1111111111111111111111111111111111111111\ntype widget\ntag v0.0.1\n",
+    "error": "E_PARSE: a tag object named an unknown kind of target"
+  }
+]

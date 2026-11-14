@@ -1,0 +1,7 @@
+[
+  {"name": "short line", "payload": "hello\n", "output": "000ahello\n"},
+  {"name": "one byte", "payload": "x", "output": "0005x"},
+  {"name": "status line", "payload": "unpack ok\n", "output": "000eunpack ok\n"},
+  {"name": "sixteen bytes", "payload": "0123456789abcdef", "output": "00140123456789abcdef"},
+  {"name": "empty payload", "payload": "", "error": "E_PARSE: a line to send was empty or too long"}
+]
