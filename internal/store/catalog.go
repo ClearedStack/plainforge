@@ -70,6 +70,39 @@ func OpenCatalog(root string, initNames []string) (*Catalog, error) {
 	return c, nil
 }
 
+// OpenCatalogReadOnly opens every bare <name>.git repository under root
+// without creating directories or sweeping temporary files.
+func OpenCatalogReadOnly(root string) (*Catalog, error) {
+	st, err := os.Stat(root)
+	if err != nil {
+		return nil, pferr.Parsef("the repository root does not exist")
+	}
+	if !st.IsDir() {
+		return nil, pferr.Parsef("the repository root is not a directory")
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil, storageErr("reading the repository root", err)
+	}
+	c := &Catalog{root: root, repos: make(map[string]*Repo)}
+	for _, e := range entries {
+		ename := e.Name()
+		if ename == "lost+found" || ename == CatalogSpoolDir {
+			continue
+		}
+		if !e.IsDir() || !strings.HasSuffix(ename, ".git") {
+			return nil, pferr.Needsf("the repository root holds an entry that is not a bare repository")
+		}
+		name := strings.TrimSuffix(ename, ".git")
+		r, err := OpenReadOnly(filepath.Join(root, ename))
+		if err != nil {
+			return nil, err
+		}
+		c.repos[name] = r
+	}
+	return c, nil
+}
+
 // Root returns the directory holding the bare repositories.
 func (c *Catalog) Root() string { return c.root }
 

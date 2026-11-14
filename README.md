@@ -12,7 +12,7 @@
 
 ---
 
-> **Status: v0.1.0-draft (ready to deploy).** Plainforge serves bare Git repositories over smart HTTP, exposes the Forge v1 HTTP contract for Bellbuoy tasks and branch proposals, announces pushes to Keelworks with durable retry and projected ServiceAccount authentication, mirrors `main` and tags outward over HTTPS, and ships with `app.yaml`, `ko` build configuration, and hardened Kubernetes manifests (including `PriorityClass` and backup/restore-drill `CronJob`s). Remaining bootstrap items are listed in [Not built yet](#not-built-yet).
+> **Status: v0.1.0-draft (ready to deploy).** Plainforge serves bare Git repositories (both loose and `git gc` packed) over smart HTTP, exposes the Forge v1 HTTP contract for Bellbuoy tasks and branch proposals, announces pushes to Keelworks with durable retry and projected ServiceAccount authentication, mirrors `main` and tags outward over HTTPS, and ships with `cmd/plainforge-backup` (pure-Go `age` v1 encrypted nightly backups and isolated `fsck` restore drills), `app.yaml`, multi-binary `ko` build configuration, and hardened Kubernetes manifests. Remaining bootstrap items are listed in [Not built yet](#not-built-yet).
 
 Plainforge is a control-plane service of the ClearedStack platform. ClearedStack is an open pipeline that finds ideas for government-contracting tools, screens and scores them, and builds each one from the public rule. Plainforge is meant to be understood and used without the rest.
 
@@ -24,12 +24,13 @@ Plainforge is a control-plane service of the ClearedStack platform. ClearedStack
 | [`PROMPT.md`](PROMPT.md) | The prompt to start a build session with. It says what to build and the rules to build it under. |
 | [`component.json`](component.json) | This component’s entry in the ClearedStack naming registry. |
 | [`app.yaml`](app.yaml) | Desired application manifest read by Shipkeeper and pinned by Keelworks (`[skip-ci]`). |
-| [`.ko.yaml`](.ko.yaml) | Build settings for `ko`: `CGO_ENABLED=0`, `linux/arm64`, distroless static base pinned by digest. |
+| [`.ko.yaml`](.ko.yaml) | Multi-binary build settings for `ko` (`plainforge` and `plainforge-backup`): `CGO_ENABLED=0`, `linux/arm64`, distroless static base pinned by digest. |
 | [`contract/v1/`](contract/v1) | The cluster-private Forge v1 HTTP contract (`forge.md`) and saved wire examples (`examples/forge_exchange.json`) for Bellbuoy. |
-| [`deploy/`](deploy) | Kubernetes `PriorityClass`, `ServiceAccount`, `PersistentVolumeClaim`, `Service`, `Deployment`, `NetworkPolicy` and nightly `age` backup / monthly restore-drill `CronJob` manifests for namespace `clearedstack`. |
+| [`deploy/`](deploy) | Kubernetes `kustomization.yaml`, `PriorityClass`, `ServiceAccount`, `PersistentVolumeClaim`, `Service`, `Deployment`, `NetworkPolicy` and nightly `age` backup / monthly restore-drill `CronJob` manifests for namespace `clearedstack`. |
 | [`brand/`](brand) | The Plainforge logo and mark, for light and dark backgrounds. |
-| [`cmd/plainforge/`](cmd/plainforge) | The program. |
-| [`internal/`](internal) | Its parts: `pferr` (the three error codes), `pkt` (Git's line format), `store` (repositories and the multi-repository catalog on disk), `pack` (Git packs), `forge` (Bellbuoy task ledger, deterministic branch splicing and `/v1/repos/...` HTTP handler/client), `server` (the HTTP service, `/healthz` and the push rules), `notify` (the Keelworks push announcement and on-disk retry spool), `mirror` (outbound smart HTTP push-mirror and retry queue). |
+| [`cmd/plainforge/`](cmd/plainforge) | The Git smart HTTP and Forge v1 server program. |
+| [`cmd/plainforge-backup/`](cmd/plainforge-backup) | Nightly `age` v1 backup uploader, monthly isolated restore-drill runner, and `age` key generator (`backup`, `restore-drill`, `keygen`). |
+| [`internal/`](internal) | Its parts: `pferr` (the three error codes), `pkt` (Git's line format), `store` (loose and read-only packed repositories, pure-Go `Fsck`, and the multi-repository catalog), `pack` (Git packs), `forge` (Bellbuoy task ledger, deterministic branch splicing and `/v1/repos/...` HTTP handler/client), `server` (the HTTP service, `/healthz` and the push rules), `notify` (the Keelworks push announcement and on-disk retry spool), `mirror` (outbound smart HTTP push-mirror and retry queue), `age` (clean-room `age-encryption.org/v1` X25519 + RFC 8439 ChaCha20-Poly1305 STREAM), `backup` (deterministic catalog snapshots, HTTPS uploads and restore drills). |
 | [`testdata/make-fixtures.sh`](testdata/make-fixtures.sh) | Rebuilds the saved example packs with an ordinary Git. The tests do not run it. |
 
 ## What works today
@@ -38,8 +39,9 @@ Plainforge is written in Go with the standard library only (`module github.com/C
 
 - **One or many bare repositories over smart HTTP.** Serve a directory of `<name>.git` repositories with `-repos` (creating named repositories on first start with `-init-repos`) or a single repository with `-repo`. `git clone`, `git fetch`, `git pull`, `git ls-remote` and `git push` from an ordinary Git client work against `/<name>.git`.
 - **Health endpoint.** `GET /healthz` returns `200` with `{"status":"ok"}` for Kubernetes liveness and readiness probes.
-- **Bellbuoy Forge v1 HTTP API (`/v1/repos/{repo}/...`).** Implements [`contract/v1/forge.md`](contract/v1/forge.md) matching Bellbuoy's five `Forge` operations: `FindOpenTask`, `OpenTask`, `AddOccurrence`, `ProposeChange` (deterministically splicing single-file `DATA`/`CONFIG` changes onto `refs/heads/edit/...` via Plainforge's quarantine without touching `main`), and `SyncMirror` (`"source"` and `"task"`). Tasks and change proposals persist atomically on disk across restarts, with optional bearer token enforcement via `-forge-token-file` (`PLAINFORGE_FORGE_TOKEN_FILE`).
-- **Git's own loose layout and quarantine.** Each repository is kept on disk as loose objects and one file per ref, so `git fsck --strict` can check it. Startup sweeps left-over staging directories before serving. Every push is unpacked into a holding area first and reaches the repository only after every object has been rebuilt, hashed and checked; a push that fails any check leaves nothing behind. Concurrent pushes to the same repository are serialized cleanly.
+- **Bellbuoy Forge v1 HTTP API (`/v1/repos/{repo}/...`) and smart HTTP task branches.** Implements [`contract/v1/forge.md`](contract/v1/forge.md) matching Bellbuoy's five `Forge` operations (`FindOpenTask`, `OpenTask`, `AddOccurrence`, `ProposeChange`, `SyncMirror`) as well as Bellbuoy's orphan `refs/heads/bellbuoy/tasks` and `refs/heads/edit/*` smart HTTP branches. Tasks and change proposals persist atomically on disk across restarts, with optional bearer token enforcement via `-forge-token-file` (`PLAINFORGE_FORGE_TOKEN_FILE`).
+- **Loose writes, read-only packed imports, quarantine, and pure-Go `Fsck`.** Plainforge writes new objects and refs atomically in Git's loose layout while also reading existing `packed-refs` and `PACKv2` (`.idx`/`.pack`, including `OFS_DELTA` and `REF_DELTA`) from `git clone --bare` seed imports or `git gc`. Every push is unpacked into a holding area first and reaches the repository only after every object has been rebuilt, hashed and checked; `Repo.Fsck()` verifies `HEAD`, refs, pack stream checksums, loose objects, canonical tree sorting and full graph closure without needing `/usr/bin/git`.
+- **Nightly `age` backups and monthly isolated restore drills (`cmd/plainforge-backup`).** Snapshots read-only repository catalogs into deterministic `tar.gz` archives encrypted with `age-encryption.org/v1` X25519 + STREAM, uploads over HTTPS with bearer authentication, and verifies full decrypt + unpack + `Repo.Fsck()` recoverability inside an isolated `/scratch` directory with zero network access.
 - **Ref update rules.** A ref update is accepted only if a rule allows it:
   - only branches (`refs/heads/...`) and tags (`refs/tags/...`), with names made of letters, digits, `.`, `_`, `-` and `/`;
   - the old value the client sends must be the value the ref has now;
@@ -102,9 +104,9 @@ The tests need no network. Each rule has saved examples in a `testdata/` or `con
 
 ### Limits of what is built
 
-- Plainforge reads only loose-object repositories it wrote itself. A repository with packed objects, `packed-refs`, alternates or SHA-256 object names is refused at start-up; do not run `git gc` on its volume.
-- It never packs or deletes objects, so repositories only grow on disk.
-- No object may be larger than 8 MiB, no push larger than 256 MiB, and no request may take longer than two minutes. With `GOMEMLIMIT` defaulting to `48MiB`, pushes and fetches stream within the `64Mi` container memory limit.
+- Plainforge reads both loose-object repositories and existing `packed-refs` / `PACKv2` (`.idx` v2 + `.pack` v2) repositories, while writing all new objects and refs in loose layout. Repositories using `shallow`, `objects/info/alternates`, `.promisor` partial-clone packs or SHA-256 object names are refused at start-up.
+- Plainforge itself never repacks or deletes objects, so repositories grow on disk until repacked offline.
+- No object may be larger than 8 MiB, no push larger than 256 MiB, and no request may take longer than two minutes. With `GOMEMLIMIT` defaulting to `48MiB`, pushes, fetches and backups stream within the `64Mi` container memory limit.
 - Shallow clones (`--depth`), partial clones, protocol version 2, client-requested side-band progress on push, atomic pushes and signed pushes are refused or not offered. Git falls back by itself where it can.
 - A fetch sends whole objects rather than deltas and walks full commit ancestry to compute missing objects.
 - Plainforge enforces network isolation through Kubernetes `NetworkPolicy` (with optional `-forge-token-file` bearer auth on `/v1/`), matching `SPEC.md` ("no user accounts").
@@ -112,10 +114,10 @@ The tests need no network. Each rule has saved examples in a `testdata/` or `con
 
 ## Not built yet
 
-Items from [`SPEC.md`](SPEC.md) and [`component.json`](component.json) that stay outside the Go binary or wait on cluster bootstrap:
+Items from [`SPEC.md`](SPEC.md) and [`component.json`](component.json) that stay outside the Go binaries or wait on cluster bootstrap:
 
 - **Git over SSH.** Mentioned in `component.json` boundaries and omitted from the `SPEC.md` interface table. Plainforge has no user accounts or SSH key store, Go's standard library has no SSH server, and every cluster peer uses smart HTTP.
-- **Bootstrap image digests and backup helper image.** [`app.yaml`](app.yaml), [`deploy/plainforge.yaml`](deploy/plainforge.yaml), and [`deploy/backup-cronjob.yaml`](deploy/backup-cronjob.yaml) pin `sha256:0000...` bootstrap placeholders until Lazarette and Keelworks publish the first signed `plainforge` and `plainforge-backup` images and cluster `age` backup keys are provisioned.
+- **Bootstrap image digests and cluster secrets.** [`app.yaml`](app.yaml), [`deploy/plainforge.yaml`](deploy/plainforge.yaml), and [`deploy/backup-cronjob.yaml`](deploy/backup-cronjob.yaml) pin `sha256:0000...` bootstrap placeholders until Lazarette and Keelworks publish the first signed `plainforge` and `plainforge-backup` images and cluster `age` backup keys (`plainforge-backup keygen`) are provisioned.
 
 ## At a glance
 

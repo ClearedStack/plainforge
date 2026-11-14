@@ -64,8 +64,31 @@ func TestDeployManifestsAndKoConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(ko), "defaultBaseImage: gcr.io/distroless/static@sha256:") {
-		t.Fatalf(".ko.yaml base image is not pinned by digest:\n%s", ko)
+	koText := string(ko)
+	for _, want := range []string{
+		"defaultBaseImage: gcr.io/distroless/static@sha256:",
+		"main: ./cmd/plainforge\n",
+		"main: ./cmd/plainforge-backup\n",
+	} {
+		if !strings.Contains(koText, want) {
+			t.Fatalf(".ko.yaml is missing %q:\n%s", want, koText)
+		}
+	}
+
+	kust, err := os.ReadFile("deploy/kustomization.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	kustText := string(kust)
+	for _, want := range []string{
+		"- priorityclass.yaml\n",
+		"- networkpolicy.yaml\n",
+		"- plainforge.yaml\n",
+		"- backup-cronjob.yaml\n",
+	} {
+		if !strings.Contains(kustText, want) {
+			t.Errorf("deploy/kustomization.yaml is missing %q", want)
+		}
 	}
 
 	appYAML, err := os.ReadFile("app.yaml")
