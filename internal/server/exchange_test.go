@@ -18,9 +18,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/clearedstack/plainforge/internal/notify"
-	"github.com/clearedstack/plainforge/internal/pack"
-	"github.com/clearedstack/plainforge/internal/store"
+	"github.com/ClearedStack/plainforge/internal/notify"
+	"github.com/ClearedStack/plainforge/internal/pack"
+	"github.com/ClearedStack/plainforge/internal/store"
 )
 
 var update = flag.Bool("update", false, "rewrite the expected answers marked FILL in testdata/exchange.json")

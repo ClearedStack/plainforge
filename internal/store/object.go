@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/clearedstack/plainforge/internal/pferr"
+	"github.com/ClearedStack/plainforge/internal/pferr"
 )
 
 // OID is a SHA-1 object name.

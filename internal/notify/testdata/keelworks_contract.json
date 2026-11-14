@@ -1,0 +1,130 @@
+[
+  {
+    "name": "accepted push on main starts a test run",
+    "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImtlZWx3b3JrcyJ9.cGxhaW5mb3JnZQ==",
+    "event": {
+      "repository": "muster",
+      "ref": "refs/heads/main",
+      "before": "abababababababababababababababababababab",
+      "after": "1111111111111111111111111111111111111111"
+    },
+    "status": 202,
+    "response": "{\"status\":\"accepted\",\"run\":\"muster-674f2946f186\"}\n",
+    "want_auth": "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImtlZWx3b3JrcyJ9.cGxhaW5mb3JnZQ==",
+    "want_body": "{\"repository\":\"muster\",\"ref\":\"refs/heads/main\",\"before\":\"abababababababababababababababababababab\",\"after\":\"1111111111111111111111111111111111111111\"}\n",
+    "want_error": "",
+    "retriable": false
+  },
+  {
+    "name": "duplicate delivery is answered 200 known",
+    "token": "plainforge-sa-token.v1",
+    "event": {
+      "repository": "muster",
+      "ref": "refs/heads/main",
+      "before": "abababababababababababababababababababab",
+      "after": "1111111111111111111111111111111111111111"
+    },
+    "status": 200,
+    "response": "{\"status\":\"known\",\"run\":\"muster-674f2946f186\"}\n",
+    "want_auth": "Bearer plainforge-sa-token.v1",
+    "want_body": "{\"repository\":\"muster\",\"ref\":\"refs/heads/main\",\"before\":\"abababababababababababababababababababab\",\"after\":\"1111111111111111111111111111111111111111\"}\n",
+    "want_error": "",
+    "retriable": false
+  },
+  {
+    "name": "tag push accepted",
+    "token": "plainforge-sa-token.v1",
+    "event": {
+      "repository": "lazarette",
+      "ref": "refs/tags/v0.2.0",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "3333333333333333333333333333333333333333"
+    },
+    "status": 202,
+    "response": "{\"status\":\"accepted\",\"run\":\"lazarette-e7f689049fd3\"}\n",
+    "want_auth": "Bearer plainforge-sa-token.v1",
+    "want_body": "{\"repository\":\"lazarette\",\"ref\":\"refs/tags/v0.2.0\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"3333333333333333333333333333333333333333\"}\n",
+    "want_error": "",
+    "retriable": false
+  },
+  {
+    "name": "503 too many runs in progress is retriable",
+    "token": "plainforge-sa-token.v1",
+    "event": {
+      "repository": "muster",
+      "ref": "refs/heads/main",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "1111111111111111111111111111111111111111"
+    },
+    "status": 503,
+    "response": "{\"status\":\"refused\",\"detail\":\"too many runs in progress\"}\n",
+    "want_auth": "Bearer plainforge-sa-token.v1",
+    "want_body": "{\"repository\":\"muster\",\"ref\":\"refs/heads/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"1111111111111111111111111111111111111111\"}\n",
+    "want_error": "E_TIMEOUT: the push notification was answered with status 503",
+    "retriable": true
+  },
+  {
+    "name": "401 invalid bearer token is not retried",
+    "token": "expired-token.v1",
+    "event": {
+      "repository": "muster",
+      "ref": "refs/heads/main",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "1111111111111111111111111111111111111111"
+    },
+    "status": 401,
+    "response": "{\"status\":\"refused\",\"detail\":\"bearer token is not valid\"}\n",
+    "want_auth": "Bearer expired-token.v1",
+    "want_body": "{\"repository\":\"muster\",\"ref\":\"refs/heads/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"1111111111111111111111111111111111111111\"}\n",
+    "want_error": "E_PARSE: the push notification was answered with status 401",
+    "retriable": false
+  },
+  {
+    "name": "403 wrong caller is not retried",
+    "token": "wrong-caller.v1",
+    "event": {
+      "repository": "muster",
+      "ref": "refs/heads/main",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "1111111111111111111111111111111111111111"
+    },
+    "status": 403,
+    "response": "{\"status\":\"refused\",\"detail\":\"caller is not Plainforge\"}\n",
+    "want_auth": "Bearer wrong-caller.v1",
+    "want_body": "{\"repository\":\"muster\",\"ref\":\"refs/heads/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"1111111111111111111111111111111111111111\"}\n",
+    "want_error": "E_PARSE: the push notification was answered with status 403",
+    "retriable": false
+  },
+  {
+    "name": "400 broken payload is not retried",
+    "token": "plainforge-sa-token.v1",
+    "event": {
+      "repository": "muster",
+      "ref": "refs/heads/main",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "1111111111111111111111111111111111111111"
+    },
+    "status": 400,
+    "response": "{\"status\":\"refused\",\"code\":\"E_PARSE\",\"detail\":\"field repository is malformed\"}\n",
+    "want_auth": "Bearer plainforge-sa-token.v1",
+    "want_body": "{\"repository\":\"muster\",\"ref\":\"refs/heads/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"1111111111111111111111111111111111111111\"}\n",
+    "want_error": "E_PARSE: the push notification was answered with status 400",
+    "retriable": false
+  },
+  {
+    "name": "422 unfamiliar ref is not retried",
+    "token": "plainforge-sa-token.v1",
+    "event": {
+      "repository": "muster",
+      "ref": "refs/heads/main",
+      "before": "0000000000000000000000000000000000000000",
+      "after": "1111111111111111111111111111111111111111"
+    },
+    "status": 422,
+    "response": "{\"status\":\"refused\",\"code\":\"E_NEEDS_SUBTOOL\",\"detail\":\"no rule for this kind of ref\"}\n",
+    "want_auth": "Bearer plainforge-sa-token.v1",
+    "want_body": "{\"repository\":\"muster\",\"ref\":\"refs/heads/main\",\"before\":\"0000000000000000000000000000000000000000\",\"after\":\"1111111111111111111111111111111111111111\"}\n",
+    "want_error": "E_NEEDS_SUBTOOL: the push notification was answered with status 422",
+    "retriable": false
+  }
+]

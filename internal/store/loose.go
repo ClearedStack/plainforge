@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/clearedstack/plainforge/internal/pferr"
+	"github.com/ClearedStack/plainforge/internal/pferr"
 )
 
 // errNotFound is returned inside this package when an object is not stored.

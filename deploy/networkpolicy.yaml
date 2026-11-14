@@ -1,0 +1,103 @@
+# Default-deny policy for the clearedstack namespace (matches logbook/deploy)
+# plus the explicit ingress and egress rules Plainforge needs.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: clearedstack
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Plainforge accepts smart HTTP Git traffic only from its authorized peers in
+# clearedstack and cs-workers, and opens connections only to cluster DNS,
+# Keelworks' webhook endpoint, and external HTTPS (port 443) for outbound
+# GitHub push-mirroring.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: plainforge
+  namespace: clearedstack
+  labels:
+    app.kubernetes.io/name: plainforge
+    app.kubernetes.io/part-of: clearedstack
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: plainforge
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keelworks
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: keelworks
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: shipkeeper
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: muster
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cs-workers
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: bellbuoy
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cs-workers
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: moldloft
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cs-workers
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: chartroom
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Cluster DNS lookups.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Push notifications to Keelworks in clearedstack.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keelworks
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080
+    # Outbound HTTPS push-mirroring to GitHub only; private and link-local
+    # ranges are excluded so Plainforge cannot reach cluster-internal HTTPS
+    # services such as the Kubernetes API server.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - protocol: TCP
+          port: 443

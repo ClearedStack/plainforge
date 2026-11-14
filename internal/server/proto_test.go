@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/clearedstack/plainforge/internal/pkt"
-	"github.com/clearedstack/plainforge/internal/store"
+	"github.com/ClearedStack/plainforge/internal/pkt"
+	"github.com/ClearedStack/plainforge/internal/store"
 )
 
 func errText(err error) string {

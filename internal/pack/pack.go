@@ -11,8 +11,8 @@ import (
 	"hash"
 	"io"
 
-	"github.com/clearedstack/plainforge/internal/pferr"
-	"github.com/clearedstack/plainforge/internal/store"
+	"github.com/ClearedStack/plainforge/internal/pferr"
+	"github.com/ClearedStack/plainforge/internal/store"
 )
 
 const (

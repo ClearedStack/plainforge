@@ -1,6 +1,6 @@
 package pack
 
-import "github.com/clearedstack/plainforge/internal/pferr"
+import "github.com/ClearedStack/plainforge/internal/pferr"
 
 var errDelta = pferr.Parsef("a delta in the pack is malformed")
 

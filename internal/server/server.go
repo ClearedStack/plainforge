@@ -1,4 +1,4 @@
-// Package server serves one bare repository over Git's smart HTTP protocol.
+// Package server serves bare Git repositories over Git's smart HTTP protocol.
 package server
 
 import (
@@ -8,14 +8,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/clearedstack/plainforge/internal/notify"
-	"github.com/clearedstack/plainforge/internal/pack"
-	"github.com/clearedstack/plainforge/internal/pferr"
-	"github.com/clearedstack/plainforge/internal/pkt"
-	"github.com/clearedstack/plainforge/internal/store"
+	"github.com/ClearedStack/plainforge/internal/mirror"
+	"github.com/ClearedStack/plainforge/internal/notify"
+	"github.com/ClearedStack/plainforge/internal/pack"
+	"github.com/ClearedStack/plainforge/internal/pferr"
+	"github.com/ClearedStack/plainforge/internal/pkt"
+	"github.com/ClearedStack/plainforge/internal/store"
 )
 
 // Limits. None of these numbers comes from the specification; see the
@@ -30,24 +30,38 @@ const (
 	MaxPush = 256 << 20
 )
 
-// Server serves one repository.
+// Server serves one repository (Repo) or a directory of repositories
+// (Catalog) over Git's smart HTTP protocol.
 type Server struct {
-	Repo *store.Repo
-	// Notify announces accepted pushes. Nil turns announcements off.
+	Repo    *store.Repo
+	Catalog *store.Catalog
+	// Notify announces accepted pushes to Keelworks. Nil turns announcements off.
 	Notify notify.Sender
+	// Mirror schedules outbound source mirroring on main and tag updates.
+	// Nil turns mirroring off.
+	Mirror mirror.Enqueuer
 	// Log receives one line per accepted or refused ref update.
 	Log *log.Logger
 	// Timeout replaces RequestTimeout when it is not zero.
 	Timeout time.Duration
-
-	// push makes sure one push at a time changes the repository.
-	push sync.Mutex
 }
 
 func (s *Server) logf(format string, a ...any) {
 	if s.Log != nil {
 		s.Log.Printf(format, a...)
 	}
+}
+
+func (s *Server) lookupRepo(name string) (*store.Repo, bool) {
+	if s.Catalog != nil {
+		if r, ok := s.Catalog.Get(name); ok {
+			return r, true
+		}
+	}
+	if s.Repo != nil && s.Repo.Name() == name {
+		return s.Repo, true
+	}
+	return nil, false
 }
 
 // fail answers a request with a public error as plain text.
@@ -80,18 +94,42 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rc.SetReadDeadline(deadline)
 	rc.SetWriteDeadline(deadline.Add(timeout))
 
-	rest, ok := strings.CutPrefix(r.URL.Path, "/"+s.Repo.Name()+".git/")
+	if r.URL.Path == "/healthz" {
+		if r.Method != http.MethodGet {
+			failStatus(w, http.StatusMethodNotAllowed, pferr.Needsf("this page does not answer that HTTP method"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, "{\"status\":\"ok\"}\n")
+		return
+	}
+
+	trimmed, ok := strings.CutPrefix(r.URL.Path, "/")
 	if !ok {
 		failStatus(w, http.StatusNotFound, pferr.Needsf("there is no such repository or page"))
 		return
 	}
+	seg, rest, hasSlash := strings.Cut(trimmed, "/")
+	repoName, hasGit := strings.CutSuffix(seg, ".git")
+	if !hasSlash || !hasGit {
+		failStatus(w, http.StatusNotFound, pferr.Needsf("there is no such repository or page"))
+		return
+	}
+	repo, ok := s.lookupRepo(repoName)
+	if !ok {
+		failStatus(w, http.StatusNotFound, pferr.Needsf("there is no such repository or page"))
+		return
+	}
+
 	switch {
 	case rest == "info/refs" && r.Method == http.MethodGet:
-		s.infoRefs(w, r)
+		s.infoRefs(w, r, repo)
 	case rest == serviceUpload && r.Method == http.MethodPost:
-		s.uploadPack(w, r)
+		s.uploadPack(w, r, repo)
 	case rest == serviceReceive && r.Method == http.MethodPost:
-		s.receivePack(w, r)
+		s.receivePack(w, r, repo)
 	case rest == "info/refs" || rest == serviceUpload || rest == serviceReceive:
 		failStatus(w, http.StatusMethodNotAllowed, pferr.Needsf("this page does not answer that HTTP method"))
 	default:
@@ -138,25 +176,25 @@ func body(r *http.Request, service string, max int64) (io.Reader, error) {
 	return &limited{r: in, max: max + 1}, nil
 }
 
-func (s *Server) infoRefs(w http.ResponseWriter, r *http.Request) {
+func (s *Server) infoRefs(w http.ResponseWriter, r *http.Request, repo *store.Repo) {
 	service := r.URL.Query().Get("service")
 	if service != serviceUpload && service != serviceReceive {
 		fail(w, pferr.Needsf("only the smart HTTP protocol is supported"))
 		return
 	}
-	head, err := s.Repo.HeadTarget()
+	head, err := repo.HeadTarget()
 	if err != nil {
 		fail(w, err)
 		return
 	}
-	refs, err := s.Repo.Refs()
+	refs, err := repo.Refs()
 	if err != nil {
 		fail(w, err)
 		return
 	}
 	var peeled []Peeled
 	if service == serviceUpload {
-		if peeled, err = s.peel(refs); err != nil {
+		if peeled, err = peel(repo, refs); err != nil {
 			fail(w, err)
 			return
 		}
@@ -167,12 +205,12 @@ func (s *Server) infoRefs(w http.ResponseWriter, r *http.Request) {
 }
 
 // peel follows annotated tags to the object behind them.
-func (s *Server) peel(refs []store.Ref) ([]Peeled, error) {
+func peel(repo *store.Repo, refs []store.Ref) ([]Peeled, error) {
 	var out []Peeled
 	for _, r := range refs {
 		oid := r.OID
 		for depth := 0; ; depth++ {
-			t, data, err := s.Repo.Read(oid)
+			t, data, err := repo.Read(oid)
 			if err != nil {
 				return nil, err
 			}
@@ -195,38 +233,7 @@ func (s *Server) peel(refs []store.Ref) ([]Peeled, error) {
 	return out, nil
 }
 
-// walk lists every object reachable from the roots, in a fixed order,
-// leaving out the objects in skip. Every object it lists is added to skip.
-func (s *Server) walk(roots []store.OID, skip map[store.OID]struct{}) ([]store.OID, error) {
-	var out []store.OID
-	stack := make([]store.OID, 0, 64)
-	for i := len(roots) - 1; i >= 0; i-- {
-		stack = append(stack, roots[i])
-	}
-	for len(stack) > 0 {
-		oid := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if _, seen := skip[oid]; seen {
-			continue
-		}
-		skip[oid] = struct{}{}
-		out = append(out, oid)
-		t, data, err := s.Repo.Read(oid)
-		if err != nil {
-			return nil, err
-		}
-		links, err := store.Links(t, data)
-		if err != nil {
-			return nil, err
-		}
-		for i := len(links) - 1; i >= 0; i-- {
-			stack = append(stack, links[i].OID)
-		}
-	}
-	return out, nil
-}
-
-func (s *Server) uploadPack(w http.ResponseWriter, r *http.Request) {
+func (s *Server) uploadPack(w http.ResponseWriter, r *http.Request, repo *store.Repo) {
 	in, err := body(r, serviceUpload, MaxFetchRequest)
 	if err != nil {
 		fail(w, err)
@@ -237,7 +244,7 @@ func (s *Server) uploadPack(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	refs, err := s.Repo.Refs()
+	refs, err := repo.Refs()
 	if err != nil {
 		fail(w, err)
 		return
@@ -259,7 +266,7 @@ func (s *Server) uploadPack(w http.ResponseWriter, r *http.Request) {
 	var common []store.OID
 	seen := map[store.OID]bool{}
 	for _, have := range req.Haves {
-		if !seen[have] && s.Repo.Has(have) {
+		if !seen[have] && repo.Has(have) {
 			common = append(common, have)
 		}
 		seen[have] = true
@@ -268,11 +275,11 @@ func (s *Server) uploadPack(w http.ResponseWriter, r *http.Request) {
 	var send []store.OID
 	if req.Done {
 		skip := map[store.OID]struct{}{}
-		if _, err := s.walk(common, skip); err != nil {
+		if _, err := repo.Walk(common, skip); err != nil {
 			fail(w, err)
 			return
 		}
-		if send, err = s.walk(req.Wants, skip); err != nil {
+		if send, err = repo.Walk(req.Wants, skip); err != nil {
 			fail(w, err)
 			return
 		}
@@ -292,15 +299,15 @@ func (s *Server) uploadPack(w http.ResponseWriter, r *http.Request) {
 	} else {
 		pkt.WriteString(w, "NAK\n")
 	}
-	if err := pack.Write(w, send, s.Repo.Read); err != nil {
+	if err := pack.Write(w, send, repo.Read); err != nil {
 		// The answer has already started, so the only honest signal left is
 		// to cut the connection; the client then sees a broken pack.
-		s.logf("fetch aborted: %s", pferr.Public(err, "the pack could not be sent"))
+		s.logf("fetch aborted repo=%s: %s", repo.Name(), pferr.Public(err, "the pack could not be sent"))
 		panic(http.ErrAbortHandler)
 	}
 }
 
-func (s *Server) receivePack(w http.ResponseWriter, r *http.Request) {
+func (s *Server) receivePack(w http.ResponseWriter, r *http.Request, repo *store.Repo) {
 	in, err := body(r, serviceReceive, MaxPush)
 	if err != nil {
 		fail(w, err)
@@ -318,8 +325,8 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.push.Lock()
-	defer s.push.Unlock()
+	repo.LockPush()
+	defer repo.UnlockPush()
 
 	needPack := false
 	for _, c := range cmds {
@@ -327,7 +334,7 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request) {
 	}
 	var unpackErr error
 	if needPack {
-		unpackErr = s.unpack(in)
+		unpackErr = unpack(repo, in)
 	}
 	if unpackErr != nil {
 		// Let the client finish sending so that it reads the answer.
@@ -335,9 +342,15 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var report []string
+	mirrorDue := false
+	prefix := s.repoPrefix(repo)
 	if unpackErr != nil {
 		pe := pferr.Public(unpackErr, "the pack could not be stored")
-		s.logf("push refused: %s", pe)
+		if prefix != "" {
+			s.logf("push refused repo=%s: %s", repo.Name(), pe)
+		} else {
+			s.logf("push refused: %s", pe)
+		}
 		report = append(report, "unpack "+pe.Error())
 		for _, c := range cmds {
 			report = append(report, "ng "+c.Ref+" "+pe.Error())
@@ -350,17 +363,23 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request) {
 			if done[c.Ref] {
 				err = pferr.Parsef("the push names the same ref twice")
 			} else {
-				err = s.update(r.Context(), c)
+				err = s.update(r.Context(), repo, c)
 			}
 			done[c.Ref] = true
 			if err != nil {
 				pe := pferr.Public(err, "the ref could not be updated")
-				s.logf("update refused ref=%q: %s", c.Ref, pe)
+				s.logf("update refused %sref=%q: %s", prefix, c.Ref, pe)
 				report = append(report, "ng "+c.Ref+" "+pe.Error())
 				continue
 			}
+			if mirror.IsMirrorRef(c.Ref) {
+				mirrorDue = true
+			}
 			report = append(report, "ok "+c.Ref)
 		}
+	}
+	if mirrorDue && s.Mirror != nil {
+		s.Mirror.Enqueue(repo)
 	}
 	if !hasCap(caps, "report-status") {
 		return
@@ -371,10 +390,17 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request) {
 	pkt.Flush(w)
 }
 
+func (s *Server) repoPrefix(repo *store.Repo) string {
+	if s.Catalog != nil {
+		return "repo=" + repo.Name() + " "
+	}
+	return ""
+}
+
 // unpack reads the pack of a push into a quarantine, checks it and moves
 // it into the repository.
-func (s *Server) unpack(in io.Reader) error {
-	q, err := s.Repo.NewQuarantine()
+func unpack(repo *store.Repo, in io.Reader) error {
+	q, err := repo.NewQuarantine()
 	if err != nil {
 		return err
 	}
@@ -386,37 +412,38 @@ func (s *Server) unpack(in io.Reader) error {
 }
 
 // update applies one ref update and announces it when the rule says so.
-func (s *Server) update(ctx context.Context, c Command) error {
+func (s *Server) update(ctx context.Context, repo *store.Repo, c Command) error {
 	// Read the current value only for names that pass the name rule; Decide
 	// reports a bad name itself.
 	var current store.OID
 	if store.CheckRefName(c.Ref) == nil {
 		var err error
-		if current, _, err = s.Repo.Ref(c.Ref); err != nil {
+		if current, _, err = repo.Ref(c.Ref); err != nil {
 			return err
 		}
 	}
 	var kind store.Type
 	if !c.New.IsZero() {
 		var err error
-		if kind, _, err = s.Repo.TypeOf(c.New); err != nil {
+		if kind, _, err = repo.TypeOf(c.New); err != nil {
 			return err
 		}
 	}
 	err := Decide(Update{Cmd: c, Current: current, NewKind: kind, FastForward: func() (bool, error) {
-		return s.isAncestor(c.Old, c.New)
+		return repo.IsAncestor(c.Old, c.New)
 	}})
 	if err != nil {
 		return err
 	}
-	if err := s.Repo.SetRef(c.Ref, c.New); err != nil {
+	if err := repo.SetRef(c.Ref, c.New); err != nil {
 		return err
 	}
-	s.logf("update accepted ref=%s before=%s after=%s", c.Ref, c.Old, c.New)
+	prefix := s.repoPrefix(repo)
+	s.logf("update accepted %sref=%s before=%s after=%s", prefix, c.Ref, c.Old, c.New)
 
 	var message []byte
 	if c.Ref == notify.MainBranch {
-		_, data, err := s.Repo.Read(c.New)
+		_, data, err := repo.Read(c.New)
 		if err != nil {
 			return nil // the update itself has landed
 		}
@@ -424,52 +451,20 @@ func (s *Server) update(ctx context.Context, c Command) error {
 			message = info.Message
 		}
 	}
-	event, announce := notify.Decide(s.Repo.Name(), c.Ref, c.Old, c.New, message)
+	event, announce := notify.Decide(repo.Name(), c.Ref, c.Old, c.New, message)
 	switch {
 	case !announce:
-		s.logf("notification not due ref=%s", c.Ref)
+		s.logf("notification not due %sref=%s", prefix, c.Ref)
 	case s.Notify == nil:
-		s.logf("notification off ref=%s", c.Ref)
+		s.logf("notification off %sref=%s", prefix, c.Ref)
 	default:
 		nctx, cancel := context.WithTimeout(ctx, notify.Timeout)
 		defer cancel()
 		if err := s.Notify.Send(nctx, event); err != nil {
-			s.logf("notification failed ref=%s: %s", c.Ref, pferr.Public(err, "the push notification failed"))
+			s.logf("notification failed %sref=%s: %s", prefix, c.Ref, pferr.Public(err, "the push notification failed"))
 		} else {
-			s.logf("notification sent ref=%s", c.Ref)
+			s.logf("notification sent %sref=%s", prefix, c.Ref)
 		}
 	}
 	return nil
-}
-
-// isAncestor reports whether old can be reached from tip by following
-// parents.
-func (s *Server) isAncestor(old, tip store.OID) (bool, error) {
-	seen := map[store.OID]bool{tip: true}
-	queue := []store.OID{tip}
-	for len(queue) > 0 {
-		oid := queue[0]
-		queue = queue[1:]
-		if oid == old {
-			return true, nil
-		}
-		t, data, err := s.Repo.Read(oid)
-		if err != nil {
-			return false, err
-		}
-		if t != store.Commit {
-			return false, pferr.Parsef("a commit has a parent that is not a commit")
-		}
-		info, err := store.ParseCommit(data)
-		if err != nil {
-			return false, err
-		}
-		for _, p := range info.Parents {
-			if !seen[p] {
-				seen[p] = true
-				queue = append(queue, p)
-			}
-		}
-	}
-	return false, nil
 }

@@ -1,3 +1,3 @@
-module github.com/clearedstack/plainforge
+module github.com/ClearedStack/plainforge
 
 go 1.24

@@ -8,8 +8,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
-	"github.com/clearedstack/plainforge/internal/pferr"
+	"github.com/ClearedStack/plainforge/internal/pferr"
 )
 
 // DefaultBranch is the branch HEAD names in a repository Plainforge creates.
@@ -18,6 +19,9 @@ const DefaultBranch = "refs/heads/main"
 // workDir is the one directory inside the repository that Plainforge uses
 // for its own temporary files. Git tools ignore it.
 const workDir = "plainforge-tmp"
+
+// spoolDir holds durable pending work inside a repository across restarts.
+const spoolDir = "plainforge-spool"
 
 // commitMarker is the file that says a quarantine was fully checked and was
 // being moved into the repository.
@@ -28,11 +32,21 @@ var (
 	refPartRE  = regexp.MustCompile(`^[A-Za-z0-9_-][A-Za-z0-9._-]*$`)
 )
 
+// CheckRepoName checks that name is an allowed bare repository name.
+func CheckRepoName(name string) error {
+	if !repoNameRE.MatchString(name) || strings.Contains(name, "..") ||
+		strings.HasSuffix(name, ".") || strings.HasSuffix(name, "-") || strings.HasSuffix(name, "_") {
+		return pferr.Needsf("the repository directory name is outside the accepted character set")
+	}
+	return nil
+}
+
 // Repo is one bare repository on disk.
 type Repo struct {
-	dir  string
-	name string
-	objs objdir
+	dir    string
+	name   string
+	objs   objdir
+	pushMu sync.Mutex
 }
 
 // Ref is a ref and the object it names.
@@ -46,8 +60,8 @@ type Ref struct {
 // Plainforge has no rule for is refused.
 func Open(dir string) (*Repo, error) {
 	name := strings.TrimSuffix(filepath.Base(filepath.Clean(dir)), ".git")
-	if !repoNameRE.MatchString(name) {
-		return nil, pferr.Needsf("the repository directory name is outside the accepted character set")
+	if err := CheckRepoName(name); err != nil {
+		return nil, err
 	}
 	r := &Repo{dir: dir, name: name, objs: objdir{filepath.Join(dir, "objects")}}
 	entries, err := os.ReadDir(dir)
@@ -70,6 +84,15 @@ func Open(dir string) (*Repo, error) {
 
 // Name is the repository name, taken from its directory.
 func (r *Repo) Name() string { return r.name }
+
+// SpoolDir returns the durable spool directory inside this repository.
+func (r *Repo) SpoolDir() string { return filepath.Join(r.dir, spoolDir) }
+
+// LockPush serializes pushes to this repository.
+func (r *Repo) LockPush() { r.pushMu.Lock() }
+
+// UnlockPush releases the push lock on this repository.
+func (r *Repo) UnlockPush() { r.pushMu.Unlock() }
 
 func (r *Repo) create() error {
 	for _, d := range []string{"objects", "refs/heads", "refs/tags"} {
@@ -431,3 +454,67 @@ func (q *Quarantine) Commit() error {
 
 // Discard throws the quarantine away.
 func (q *Quarantine) Discard() { os.RemoveAll(q.objs.dir) }
+
+// Walk lists every object reachable from roots in a fixed order, leaving out
+// objects already in skip. Every listed object is added to skip.
+func (r *Repo) Walk(roots []OID, skip map[OID]struct{}) ([]OID, error) {
+	var out []OID
+	stack := make([]OID, 0, 64)
+	for i := len(roots) - 1; i >= 0; i-- {
+		stack = append(stack, roots[i])
+	}
+	for len(stack) > 0 {
+		oid := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if _, seen := skip[oid]; seen {
+			continue
+		}
+		skip[oid] = struct{}{}
+		out = append(out, oid)
+		t, data, err := r.Read(oid)
+		if err != nil {
+			return nil, err
+		}
+		links, err := Links(t, data)
+		if err != nil {
+			return nil, err
+		}
+		for i := len(links) - 1; i >= 0; i-- {
+			stack = append(stack, links[i].OID)
+		}
+	}
+	return out, nil
+}
+
+// IsAncestor reports whether old can be reached from tip by following commit
+// parents.
+func (r *Repo) IsAncestor(old, tip OID) (bool, error) {
+	seen := map[OID]bool{tip: true}
+	queue := []OID{tip}
+	for len(queue) > 0 {
+		oid := queue[0]
+		queue = queue[1:]
+		if oid == old {
+			return true, nil
+		}
+		t, data, err := r.Read(oid)
+		if err != nil {
+			return false, err
+		}
+		if t != Commit {
+			return false, pferr.Parsef("a commit has a parent that is not a commit")
+		}
+		info, err := ParseCommit(data)
+		if err != nil {
+			return false, err
+		}
+		for _, p := range info.Parents {
+			if !seen[p] {
+				seen[p] = true
+				queue = append(queue, p)
+			}
+		}
+	}
+	return false, nil
+}
+

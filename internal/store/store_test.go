@@ -357,3 +357,70 @@ func TestDamagedObjectIsReported(t *testing.T) {
 		t.Fatalf("missing object: %v", err)
 	}
 }
+
+func TestRepoNameFixtures(t *testing.T) {
+	var cases []struct{ Name, Error string }
+	load(t, "reponames.json", &cases)
+	for _, c := range cases {
+		if got := errText(CheckRepoName(c.Name)); got != c.Error {
+			t.Errorf("%q: got %q, want %q", c.Name, got, c.Error)
+		}
+	}
+}
+
+func TestCatalog(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repos")
+	// Pre-create lost+found and an existing bare repo before opening.
+	if err := os.MkdirAll(filepath.Join(root, "lost+found"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(filepath.Join(root, "existing.git")); err != nil {
+		t.Fatal(err)
+	}
+	init := []string{"clearedstack.com", "trawl", "bellbuoy", "existing"}
+	cat, err := OpenCatalog(root, init)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNames := []string{"bellbuoy", "clearedstack.com", "existing", "trawl"}
+	if got := cat.Names(); !reflect.DeepEqual(got, wantNames) {
+		t.Fatalf("names %v, want %v", got, wantNames)
+	}
+	for _, name := range wantNames {
+		if r, ok := cat.Get(name); !ok || r.Name() != name {
+			t.Fatalf("Get(%q) = %v, %v", name, r, ok)
+		}
+	}
+	if _, ok := cat.Get("unknown"); ok {
+		t.Fatal("unknown repository was found")
+	}
+	r, created, err := cat.Ensure("sample-tool")
+	if err != nil || !created || r.Name() != "sample-tool" {
+		t.Fatalf("Ensure new: %v %v %v", r, created, err)
+	}
+	_, created, err = cat.Ensure("sample-tool")
+	if err != nil || created {
+		t.Fatalf("Ensure existing: %v %v", created, err)
+	}
+
+	// Reopening preserves all repositories and ignores plainforge-spool.
+	if err := os.MkdirAll(cat.SpoolDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cat2, err := OpenCatalog(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cat2.Repos()) != 5 {
+		t.Fatalf("reopened %d repos, want 5", len(cat2.Repos()))
+	}
+
+	// A stray file inside root is refused cleanly.
+	if err := os.WriteFile(filepath.Join(root, "stray.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenCatalog(root, nil); errText(err) != "E_NEEDS_SUBTOOL: the repository root holds an entry that is not a bare repository" {
+		t.Fatalf("stray file: got %q", errText(err))
+	}
+}
+

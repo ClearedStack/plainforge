@@ -6,7 +6,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/clearedstack/plainforge/internal/pferr"
+	"github.com/ClearedStack/plainforge/internal/pferr"
 )
 
 // MaxPayload is the longest payload one pkt-line may carry.
