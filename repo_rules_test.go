@@ -68,6 +68,36 @@ func TestDeployManifestsAndKoConfig(t *testing.T) {
 		t.Fatalf(".ko.yaml base image is not pinned by digest:\n%s", ko)
 	}
 
+	appYAML, err := os.ReadFile("app.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	appText := string(appYAML)
+	for _, want := range []string{
+		"name: plainforge\n",
+		"namespace: clearedstack\n",
+		"image: plainforge\n",
+		"digest: sha256:",
+		"replicas: 1\n",
+		"port: 8080\n",
+		"memory: 64Mi\n",
+		"- clearedstack/keelworks\n",
+		"- clearedstack/keelworks-build\n",
+		"- cs-workers/bellbuoy\n",
+	} {
+		if !strings.Contains(appText, want) {
+			t.Errorf("app.yaml is missing %q", want)
+		}
+	}
+
+	pc, err := os.ReadFile("deploy/priorityclass.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(pc), "name: clearedstack-high") {
+		t.Errorf("deploy/priorityclass.yaml is missing clearedstack-high")
+	}
+
 	pf, err := os.ReadFile("deploy/plainforge.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -75,6 +105,8 @@ func TestDeployManifestsAndKoConfig(t *testing.T) {
 	pfText := string(pf)
 	requiredInPlainforge := []string{
 		"namespace: clearedstack",
+		"port: 8080",
+		"priorityClassName: clearedstack-high",
 		"image: lazarette.clearedstack.svc.cluster.local:5000/plainforge@sha256:",
 		"runAsNonRoot: true",
 		"readOnlyRootFilesystem: true",
@@ -87,6 +119,7 @@ func TestDeployManifestsAndKoConfig(t *testing.T) {
 		`values: ["cm3588-plus"]`,
 		"memory: 64Mi",
 		"audience: keelworks",
+		"-notify-url=http://keelworks.clearedstack.svc.cluster.local:8080/webhook",
 		"storageClassName: longhorn",
 	}
 	for _, want := range requiredInPlainforge {
@@ -98,6 +131,27 @@ func TestDeployManifestsAndKoConfig(t *testing.T) {
 		t.Error("deploy/plainforge.yaml must not contain inline Secret manifests")
 	}
 
+	backup, err := os.ReadFile("deploy/backup-cronjob.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backupText := string(backup)
+	for _, want := range []string{
+		"name: plainforge-backup",
+		"name: plainforge-restore-drill",
+		"image: lazarette.clearedstack.svc.cluster.local:5000/plainforge-backup@sha256:",
+		"runAsNonRoot: true",
+		"readOnlyRootFilesystem: true",
+		`drop: ["ALL"]`,
+	} {
+		if !strings.Contains(backupText, want) {
+			t.Errorf("deploy/backup-cronjob.yaml is missing %q", want)
+		}
+	}
+	if strings.Contains(backupText, "kind: Secret") {
+		t.Error("deploy/backup-cronjob.yaml must not contain inline Secret manifests")
+	}
+
 	np, err := os.ReadFile("deploy/networkpolicy.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -106,10 +160,12 @@ func TestDeployManifestsAndKoConfig(t *testing.T) {
 	requiredInNetPol := []string{
 		"name: default-deny",
 		"name: plainforge",
+		"name: plainforge-backup",
 		"namespace: clearedstack",
 		"- Ingress",
 		"- Egress",
 		"app.kubernetes.io/name: keelworks",
+		"app.kubernetes.io/name: keelworks-build",
 		"app.kubernetes.io/name: shipkeeper",
 		"app.kubernetes.io/name: bellbuoy",
 		"port: 443",
@@ -117,6 +173,15 @@ func TestDeployManifestsAndKoConfig(t *testing.T) {
 	for _, want := range requiredInNetPol {
 		if !strings.Contains(npText, want) {
 			t.Errorf("deploy/networkpolicy.yaml is missing %q", want)
+		}
+	}
+
+	for _, contractFile := range []string{
+		"contract/v1/forge.md",
+		"contract/v1/examples/forge_exchange.json",
+	} {
+		if _, err := os.Stat(contractFile); err != nil {
+			t.Errorf("missing required contract file %s: %v", contractFile, err)
 		}
 	}
 }

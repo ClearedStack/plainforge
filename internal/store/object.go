@@ -160,10 +160,30 @@ func ParseTag(data []byte) (Link, error) {
 	return Link{OID: oid, Type: t}, nil
 }
 
-// parseTree reads the entries of a tree. Submodule entries point outside
-// the repository and are not returned.
-func parseTree(data []byte) ([]Link, error) {
-	var links []Link
+// TreeEntry is one entry in a Git tree object.
+type TreeEntry struct {
+	Mode string
+	Name string
+	OID  OID
+}
+
+// checkTreeEntry validates one tree entry's mode and name.
+func checkTreeEntry(e TreeEntry) error {
+	if e.Name == "" || e.Name == "." || e.Name == ".." || strings.EqualFold(e.Name, ".git") ||
+		strings.Contains(e.Name, "/") || strings.IndexByte(e.Name, 0) >= 0 {
+		return pferr.Parsef("a tree entry had a name that is not allowed")
+	}
+	switch e.Mode {
+	case "40000", "100644", "100755", "120000", "160000":
+		return nil
+	default:
+		return pferr.Parsef("a tree entry had an unknown mode")
+	}
+}
+
+// ParseTree reads every entry of a Git tree object in order.
+func ParseTree(data []byte) ([]TreeEntry, error) {
+	var out []TreeEntry
 	for len(data) > 0 {
 		sp := bytes.IndexByte(data, ' ')
 		if sp < 1 {
@@ -176,21 +196,109 @@ func parseTree(data []byte) ([]Link, error) {
 			return nil, pferr.Parsef("a tree entry was cut short")
 		}
 		name := string(data[:nul])
-		if name == "" || name == "." || name == ".." || strings.EqualFold(name, ".git") || strings.Contains(name, "/") {
-			return nil, pferr.Parsef("a tree entry had a name that is not allowed")
-		}
 		var oid OID
 		copy(oid[:], data[nul+1:nul+21])
 		data = data[nul+21:]
-		switch mode {
+		e := TreeEntry{Mode: mode, Name: name, OID: oid}
+		if err := checkTreeEntry(e); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func treeSortKey(e TreeEntry) string {
+	if e.Mode == "40000" {
+		return e.Name + "/"
+	}
+	return e.Name
+}
+
+// FormatTree encodes tree entries in Git's canonical sort order.
+func FormatTree(entries []TreeEntry) ([]byte, error) {
+	cp := make([]TreeEntry, len(entries))
+	copy(cp, entries)
+	seen := make(map[string]bool, len(cp))
+	for _, e := range cp {
+		if err := checkTreeEntry(e); err != nil {
+			return nil, err
+		}
+		if e.OID.IsZero() {
+			return nil, pferr.Parsef("a tree entry named the zero object")
+		}
+		if seen[e.Name] {
+			return nil, pferr.Parsef("a tree had two entries with the same name")
+		}
+		seen[e.Name] = true
+	}
+	for i := 1; i < len(cp); i++ {
+		cur := cp[i]
+		curKey := treeSortKey(cur)
+		j := i - 1
+		for j >= 0 && treeSortKey(cp[j]) > curKey {
+			cp[j+1] = cp[j]
+			j--
+		}
+		cp[j+1] = cur
+	}
+	var buf bytes.Buffer
+	for _, e := range cp {
+		buf.WriteString(e.Mode)
+		buf.WriteByte(' ')
+		buf.WriteString(e.Name)
+		buf.WriteByte(0)
+		buf.Write(e.OID[:])
+	}
+	return buf.Bytes(), nil
+}
+
+// FormatCommit encodes a Git commit object with the given tree, parents,
+// author/committer line (for example "Plainforge <plainforge@clearedstack.internal> 0 +0000")
+// and message.
+func FormatCommit(tree OID, parents []OID, ident, message string) ([]byte, error) {
+	if tree.IsZero() {
+		return nil, pferr.Parsef("a commit cannot name the zero tree")
+	}
+	if ident == "" || strings.ContainsAny(ident, "\r\n\x00") {
+		return nil, pferr.Parsef("a commit identity line was malformed")
+	}
+	if strings.ContainsAny(message, "\r\x00") {
+		return nil, pferr.Parsef("a commit message contained forbidden bytes")
+	}
+	var buf bytes.Buffer
+	buf.WriteString("tree " + tree.String() + "\n")
+	for _, p := range parents {
+		if p.IsZero() {
+			return nil, pferr.Parsef("a commit cannot name the zero parent")
+		}
+		buf.WriteString("parent " + p.String() + "\n")
+	}
+	buf.WriteString("author " + ident + "\n")
+	buf.WriteString("committer " + ident + "\n\n")
+	buf.WriteString(message)
+	if !strings.HasSuffix(message, "\n") {
+		buf.WriteByte('\n')
+	}
+	return buf.Bytes(), nil
+}
+
+// parseTree reads the entries of a tree. Submodule entries point outside
+// the repository and are not returned.
+func parseTree(data []byte) ([]Link, error) {
+	entries, err := ParseTree(data)
+	if err != nil {
+		return nil, err
+	}
+	var links []Link
+	for _, e := range entries {
+		switch e.Mode {
 		case "40000":
-			links = append(links, Link{OID: oid, Type: Tree})
+			links = append(links, Link{OID: e.OID, Type: Tree})
 		case "100644", "100755", "120000":
-			links = append(links, Link{OID: oid, Type: Blob})
+			links = append(links, Link{OID: e.OID, Type: Blob})
 		case "160000":
 			// A submodule: the commit lives in another repository.
-		default:
-			return nil, pferr.Parsef("a tree entry had an unknown mode")
 		}
 	}
 	return links, nil

@@ -1,0 +1,17 @@
+# Desired state of Plainforge for Shipkeeper reconciliation.
+# Keelworks updates the digest line on verified builds with [skip-ci].
+name: plainforge
+namespace: clearedstack
+image: plainforge
+digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+replicas: 1
+port: 8080
+memory: 64Mi
+allowFrom:
+  - clearedstack/keelworks
+  - clearedstack/keelworks-build
+  - clearedstack/muster
+  - clearedstack/shipkeeper
+  - cs-workers/bellbuoy
+  - cs-workers/chartroom
+  - cs-workers/moldloft

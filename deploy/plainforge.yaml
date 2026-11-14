@@ -51,6 +51,10 @@ spec:
   ports:
     - name: http
       protocol: TCP
+      port: 8080
+      targetPort: http
+    - name: http-legacy
+      protocol: TCP
       port: 80
       targetPort: http
 ---
@@ -80,6 +84,7 @@ spec:
     spec:
       serviceAccountName: plainforge
       automountServiceAccountToken: false
+      priorityClassName: clearedstack-high
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -110,7 +115,7 @@ spec:
             # directory on the volume stays out of the repository catalog.
             - -repos=/var/lib/plainforge/repos
             - -init-repos=clearedstack.com,muster,logbook,plainforge,lazarette,keelworks,shipkeeper,trawl,sextant,assay,countersign,waybill,moldloft,shakedown,chartroom,tidegauge,bellbuoy
-            - -notify-url=http://keelworks.clearedstack.svc.cluster.local/webhook
+            - -notify-url=http://keelworks.clearedstack.svc.cluster.local:8080/webhook
             - -notify-token-file=/var/run/secrets/keelworks/token
             - -mirror-token-file=/var/run/secrets/github-mirror/token
           env:

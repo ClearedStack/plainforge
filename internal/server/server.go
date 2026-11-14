@@ -8,8 +8,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/ClearedStack/plainforge/internal/forge"
 	"github.com/ClearedStack/plainforge/internal/mirror"
 	"github.com/ClearedStack/plainforge/internal/notify"
 	"github.com/ClearedStack/plainforge/internal/pack"
@@ -31,7 +33,7 @@ const (
 )
 
 // Server serves one repository (Repo) or a directory of repositories
-// (Catalog) over Git's smart HTTP protocol.
+// (Catalog) over Git's smart HTTP protocol and the Forge v1 task/change API.
 type Server struct {
 	Repo    *store.Repo
 	Catalog *store.Catalog
@@ -40,10 +42,29 @@ type Server struct {
 	// Mirror schedules outbound source mirroring on main and tag updates.
 	// Nil turns mirroring off.
 	Mirror mirror.Enqueuer
+	// Forge holds per-repository task and change ledgers. When nil, a default
+	// store is created on first /v1/ request.
+	Forge *forge.Store
+	// ForgeTokenFile optionally requires Authorization: Bearer <token> on /v1/
+	// requests when non-empty.
+	ForgeTokenFile string
 	// Log receives one line per accepted or refused ref update.
 	Log *log.Logger
 	// Timeout replaces RequestTimeout when it is not zero.
 	Timeout time.Duration
+
+	forgeOnce    sync.Once
+	defaultForge *forge.Store
+}
+
+func (s *Server) forgeStore() *forge.Store {
+	if s.Forge != nil {
+		return s.Forge
+	}
+	s.forgeOnce.Do(func() {
+		s.defaultForge = forge.NewStore()
+	})
+	return s.defaultForge
 }
 
 func (s *Server) logf(format string, a ...any) {
@@ -103,6 +124,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.WriteHeader(http.StatusOK)
 		io.WriteString(w, "{\"status\":\"ok\"}\n")
+		return
+	}
+
+	if r.URL.Path == "/v1" || strings.HasPrefix(r.URL.Path, "/v1/") {
+		var onMirror forge.MirrorTrigger
+		if s.Mirror != nil {
+			onMirror = s.Mirror.Enqueue
+		}
+		fh := forge.Handler{
+			Store:      s.forgeStore(),
+			LookupRepo: s.lookupRepo,
+			OnMirror:   onMirror,
+			TokenFile:  s.ForgeTokenFile,
+		}
+		fh.ServeHTTP(w, r)
 		return
 	}
 
